@@ -6,8 +6,6 @@ The main site is `index.html`. A companion page, `details.html`, covers how the 
 
 ## Features
 
-- **Intro** — a short night sequence (`media/intro.mp4`) before the map; skip with Enter, Escape, or the button.
-- **Leaflet map** — Esri dark-grey basemap, borough outlines, and a compass so the map can be rotated.
 - **Crime layers** — dots coloured by type, a heatmap when zoomed in, hex areas when zoomed out. Optional DBSCAN hotspots run in the browser.
 - **Route planner** — search a place (Photon / OpenStreetMap), pick start and end, and compare **Fastest**, **Balanced** and **Safest** walks from FOSSGIS OSRM. Incidents within about 40 m of the path count toward the score.
 - **London overview** — borough ranking for the current month.
@@ -15,9 +13,7 @@ The main site is `index.html`. A companion page, `details.html`, covers how the 
 - **Insights** — sidebar panel from `js/data/insights.js`: crime mix, concentration on a 200 m grid (including a Lorenz curve and Gini), Getis-Ord Gi\* violent-crime hot cells (off the map by default), borough location quotients, and a PCA scatter of similar boroughs. Figures are computed from the loaded month, not hardcoded.
 - **Details page** — ingest, scoring, routing and clustering notes, plus a sketched production stack and schema. The running site does not use that backend.
 
-## Quick start
 
-The site is static. There is no npm install and no build step.
 
 ```bash
 git clone <repository-url>
@@ -59,49 +55,9 @@ Street-level crime comes from the [police.uk API](https://data.police.uk/docs/).
 
 Borough outlines are Local Authority Districts (ONS) for the 33 London areas, including the City of London.
 
-### Refresh
 
-1. **Raw crimes and darkest streets** (Node 20, no npm packages — the updater uses only the Node standard library):
 
-   ```bash
-   node scripts/update-london.mjs
-   ```
-
-   Writes `data/london.json` for Greater London, then runs `scripts/rank-streets.mjs` to write `data/darkest-streets.json`. You can run the ranker on its own after an existing `london.json`:
-
-   ```bash
-   node scripts/rank-streets.mjs
-   ```
-
-2. **Map dataset** (Python 3, standard library plus `curl`; no extra packages):
-
-   ```bash
-   python3 scripts/build_london.py
-   ```
-
-   Optional month: `python3 scripts/build_london.py YYYY-MM`. Writes `js/data/london.js` and `js/data/boroughs.js`.
-
-3. **Insights** (local Python or Anaconda, with NumPy — used only by this script, not in the browser):
-
-   ```bash
-   python3 scripts/build_insights.py
-   ```
-
-   Reads `js/data/london.js` and `js/data/boroughs.js`, then writes `js/data/insights.js`.
-
-After a refresh, reload the site from the same static server. The map will not pick up new files until you do.
-
-## Stack
-
-- HTML, CSS and vanilla JavaScript (no bundler, no React on the live map)
-- [Leaflet](https://leafletjs.com/) 1.9.4, [leaflet-rotate](https://github.com/Raruto/leaflet-rotate) 0.2.8 and [leaflet.heat](https://github.com/Leaflet/Leaflet.heat) 0.2.0 from unpkg
-- Basemap: Esri Canvas World Dark Gray Base and Reference tiles
-- Walking routes: [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) foot profile
-- Place search: [Photon](https://photon.komoot.io/) (OpenStreetMap)
-- Fonts: JetBrains Mono and Pirata One (Google Fonts)
 
 ## Credits
 
 Crime data from [police.uk](https://data.police.uk/), containing public sector information licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/). Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, basemap © [Esri](https://www.esri.com/). Walking routes by [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html).
-
-This repository does not include a software licence file.
