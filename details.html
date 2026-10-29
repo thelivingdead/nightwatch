@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How Night’s Watch works</title>
+  <meta name="description" content="The Night’s Watch architecture, technology stack and geospatial data model.">
+  <meta name="theme-color" content="#080D1A">
+  <link rel="icon" type="image/png" href="media/watch-favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Pirata+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=insights-1">
+</head>
+<body class="details-page">
+  <header class="nav scrolled" id="nav">
+    <a class="nav-brand wordmark" href="index.html" aria-label="Back to Night’s Watch"><img class="watch-logo" src="media/watch-mark.png" srcset="media/watch-mark.png 1x, media/watch-mark@2x.png 2x" width="44" height="44" alt="">Night’s Watch</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#stack">Stack</a>
+      <a href="#data-model">Data model</a>
+    </nav>
+    <a class="btn btn-accent btn-small" href="index.html#map">Open the map</a>
+  </header>
+
+  <main class="details-main">
+    <section class="section" id="how">
+      <div class="section-head">
+        <p class="eyebrow">How it works</p>
+        <h1>From open data to a glowing route home</h1>
+      </div>
+      <div class="steps">
+        <article class="step"><h3>Ingest</h3><p>Each month a Node job pulls street-level crimes from the police.uk API while the walkable street network comes from OpenStreetMap.</p></article>
+        <article class="step"><h3>Score</h3><p>Every street segment gets a <code>risk_score</code> from nearby incidents, weighted by category <code>severity_weight</code>.</p></article>
+        <article class="step"><h3>Route</h3><p>Fastest, balanced and safest options are compared. The chosen route glows across the dark map.</p></article>
+        <article class="step"><h3>Learn</h3><p>DBSCAN with a haversine metric finds hotspots without needing a cluster count and ignores noise.</p></article>
+      </div>
+      <div class="flow frame" aria-label="System architecture">
+        <div class="flow-col">
+          <div class="node node-source">police.uk API<small>crimes, monthly</small></div>
+          <div class="node node-source">OpenStreetMap<small>streets, lighting, pavements</small></div>
+        </div>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <div class="node">Node ingest<small>scheduled data refresh</small></div>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <div class="flow-col">
+          <div class="node node-db">PostgreSQL + PostGIS<small>GIST-indexed geometry</small></div>
+          <div class="node node-ml">scikit-learn<small>DBSCAN hotspots · later</small></div>
+        </div>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <div class="node">FastAPI<small>queries, scoring, ML</small></div>
+        <div class="flow-arrow" aria-hidden="true"></div>
+        <div class="node node-ui">Leaflet<small>map, filters, planner</small></div>
+      </div>
+    </section>
+
+    <section class="section" id="stack">
+      <div class="section-head">
+        <p class="eyebrow">Tech stack</p>
+        <h2>Each piece earns its place</h2>
+        <p class="section-lede">A production-shaped stack with a geospatial core.</p>
+      </div>
+      <div class="stack-list frame" id="stack-grid"></div>
+      <p class="fineprint">Data sources: <a href="https://data.police.uk/docs/" target="_blank" rel="noopener">police.uk API</a> for crimes and <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OpenStreetMap</a> for the street network and pedestrian features.</p>
+    </section>
+
+    <section class="section" id="data-model">
+      <div class="section-head">
+        <p class="eyebrow">Data model</p>
+        <h2>What the watch remembers</h2>
+        <p class="section-lede">Everything lives in PostgreSQL with PostGIS, in SRID 4326. Hover or tap a table to trace its links.</p>
+      </div>
+      <div class="schema-stats frame" id="schema-stats"></div>
+      <div class="schema" id="schema"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="horizon" aria-hidden="true"></div>
+    <div class="footer-inner">
+      <a class="footer-word wordmark" href="index.html">Night’s Watch</a>
+      <p class="footer-tag">Night Watch. The city sleeps. We don't.</p>
+      <nav class="footer-links" aria-label="Footer"><a href="index.html#map">The map</a><a href="index.html#about">About</a><a href="#how">How it works</a><a href="#stack">Stack</a><a href="#data-model">Data model</a></nav>
+    </div>
+  </footer>
+  <script src="js/details.js?v=glass-2"></script>
+</body>
+</html>

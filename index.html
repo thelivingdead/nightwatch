@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Night Watch · Safer walking routes for London after dark</title>
+  <meta name="description" content="Night Watch maps street-level crime from police.uk onto London’s walking network to find safer routes home at night.">
+  <meta name="theme-color" content="#0A0E1F">
+  <link rel="icon" type="image/png" href="media/watch-favicon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Pirata+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/styles.css?v=insights-1">
+</head>
+<body>
+
+  <section class="intro-cover" id="intro-cover" aria-label="Night Watch introduction">
+    <video autoplay muted playsinline preload="auto" poster="media/poster.jpg">
+      <source src="media/intro.mp4" type="video/mp4">
+    </video>
+    <div class="intro-copy">
+      <h1>Night Watch</h1>
+      <p>When the city sleeps, we keep watch.</p>
+      <button type="button" class="btn btn-accent" id="skip-intro">Enter</button>
+    </div>
+  </section>
+  <script src="js/intro.js?v=glass-2"></script>
+
+  <header class="nav" id="nav">
+    <a class="nav-brand wordmark" href="#top" aria-label="Night Watch home"><img class="watch-logo" src="media/watch-mark.png" srcset="media/watch-mark.png 1x, media/watch-mark@2x.png 2x" width="44" height="44" alt="">Night Watch</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#map">The map</a>
+      <a href="#about">About</a>
+      <a href="details.html#how">How it works</a>
+      <a href="details.html#stack">Stack</a>
+      <a href="details.html#data-model">Data model</a>
+    </nav>
+    <a class="btn btn-accent btn-small" href="#map" data-begin>Plan my walk</a>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero" id="top">
+    <canvas class="sky" id="sky" aria-hidden="true"></canvas>
+    <div class="moon" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <p class="eyebrow">London, after dark</p>
+      <p class="wordmark hero-wordmark">Night Watch</p>
+      <h1 class="hero-headline">The city sleeps. We don't.</h1>
+      <p class="lede">At night London looks different. Streets you know by day feel unfamiliar, and the quickest way home isn't always the safest. Night Watch shows you where trouble has happened and finds you a better route.</p>
+      <a class="btn btn-accent" href="#map" data-begin>Plan my walk</a>
+    </div>
+
+    <div class="hud" aria-label="Tonight in London">
+      <div class="hud-item"><span class="hud-label">London time</span><span class="hud-value" id="hud-clock">–</span></div>
+      <div class="hud-item"><span class="hud-label">Dusk and dawn</span><span class="hud-value" id="hud-sun">–</span></div>
+      <div class="hud-item"><span class="hud-label">Crimes on record</span><span class="hud-value" id="hud-crimes">–</span><span class="hud-sub" id="hud-month"></span></div>
+      <div class="hud-item hud-boroughs"><span class="hud-label">Boroughs under watch</span><span class="hud-value" id="hud-boroughs">–</span></div>
+      <div class="hud-item hud-call"><span class="hud-label">Tonight's watch</span><span class="hud-value" id="hud-call">–</span></div>
+    </div>
+  </section>
+
+  <!-- Map -->
+  <section class="map-app" id="map" aria-label="London crime map and route planner">
+    <div id="leaflet" aria-label="Map of London crime and walking routes"></div>
+
+    <aside class="sheet frame" id="sheet" aria-label="Route planner and map controls">
+      <header class="sheet-head">
+        <img class="rail-logo" src="media/watch-mark.png" srcset="media/watch-mark.png 1x, media/watch-mark@2x.png 2x" width="40" height="40" alt="" aria-hidden="true">
+        <p class="eyebrow">Plan your walk</p>
+        <p class="sheet-status"><i aria-hidden="true"></i><span id="sheet-status">police.uk</span></p>
+      </header>
+
+      <div class="sheet-body">
+        <div class="module-label"><span>Route</span><button class="link-btn" id="route-clear" hidden>Clear route</button></div>
+        <div class="directions">
+          <div class="fields">
+            <label class="field">
+              <span class="pin-dot pin-from"></span>
+              <input id="from-input" type="text" placeholder="Where are you starting?" autocomplete="off" spellcheck="false"
+                role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions" aria-label="Start">
+            </label>
+            <label class="field">
+              <span class="pin-dot pin-to"></span>
+              <input id="to-input" type="text" placeholder="Where are you heading?" autocomplete="off" spellcheck="false"
+                role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions" aria-label="Destination">
+            </label>
+          </div>
+          <button class="swap" id="swap" aria-label="Swap start and destination" title="Swap start and destination">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 4v13m0 0-3.5-3.5M7 17l3.5-3.5M17 20V7m0 0-3.5 3.5M17 7l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <ul class="suggestions" id="suggestions" role="listbox" hidden></ul>
+        </div>
+
+        <div class="presets" id="presets"></div>
+        <p class="module-label">Priority</p>
+        <div class="modes" role="radiogroup" aria-label="Route mode">
+          <button role="radio" data-mode="fastest">Fastest</button>
+          <button role="radio" data-mode="balanced">Balanced</button>
+          <button role="radio" data-mode="safest" aria-checked="true">Safest</button>
+        </div>
+        <div class="route-results" id="route-results" aria-live="polite"></div>
+        <p class="route-status warn" id="route-street-warn" hidden></p>
+
+        <details class="sheet-section" open>
+          <summary>Crime types</summary>
+          <div class="section-actions"><button class="link-btn" id="cat-toggle-all">None</button></div>
+          <ul class="categories" id="categories"></ul>
+          <p class="tiny">Each dot is a crime reported to the police, coloured by how serious it was. Theft includes shoplifting, bike theft and pickpocketing. Other covers public order offences, criminal damage, weapons and the rest. Hover over a type to see how much it affects your route.</p>
+        </details>
+
+        <details class="sheet-section" open>
+          <summary>London overview</summary>
+          <p class="overview-total"><strong id="london-total">–</strong> crimes in <span id="london-month"></span></p>
+          <ol class="borough-rank" id="borough-rank"></ol>
+          <button class="link-btn" id="rank-more">Show all 33</button>
+        </details>
+
+        <details class="sheet-section" id="darkest-streets" open>
+          <summary>London's Darkest Streets</summary>
+          <div class="darkest-filters">
+            <label class="darkest-field">
+              <span>Borough</span>
+              <select id="darkest-borough" aria-label="Filter darkest streets by borough">
+                <option value="">All boroughs</option>
+              </select>
+            </label>
+            <label class="darkest-field">
+              <span>Crime type</span>
+              <select id="darkest-type" aria-label="Filter darkest streets by crime type">
+                <option value="">All types</option>
+              </select>
+            </label>
+          </div>
+          <ol class="darkest-list" id="darkest-list"></ol>
+          <p class="tiny" id="darkest-empty" hidden>No streets match these filters.</p>
+        </details>
+
+        <details class="sheet-section" id="insights" hidden>
+          <summary>Insights</summary>
+          <p class="overview-total"><strong id="ins-total">–</strong> crimes in <span id="ins-month"></span></p>
+          <p class="tiny" id="ins-violent"></p>
+          <ol class="ins-types" id="ins-types"></ol>
+
+          <p class="module-label">Crime concentration</p>
+          <ul class="ins-stats" id="ins-conc-stats"></ul>
+          <svg class="ins-svg" id="ins-lorenz" viewBox="0 0 320 200" role="img" aria-labelledby="ins-lorenz-title"></svg>
+          <p class="tiny" id="ins-conc-note"></p>
+
+          <p class="module-label">Violent-crime hotspots</p>
+          <label class="toggle"><input type="checkbox" id="ins-hot-layer" aria-label="Show significant violent-crime hot cells on the map"><span>Significant hot cells <em>(Gi*, off by default)</em></span></label>
+          <ol class="ins-hot" id="ins-hot"></ol>
+
+          <p class="module-label">Borough profile</p>
+          <label class="darkest-field">
+            <span>Borough</span>
+            <select id="ins-borough" aria-label="Choose a borough for its crime profile"></select>
+          </label>
+          <div id="ins-profile"></div>
+          <p class="tiny">A location quotient is a borough’s share of a crime type divided by London’s share of that type; values above 1.25 mark a concentration and values below 0.8 a relative scarcity.</p>
+
+          <p class="module-label">Borough similarity</p>
+          <svg class="ins-svg" id="ins-pca" viewBox="0 0 320 220" role="img" aria-labelledby="ins-pca-title"></svg>
+          <p class="tiny" id="ins-cluster-note"></p>
+          <p class="ins-similar-label">Most similar boroughs</p>
+          <ul class="ins-similar" id="ins-similar"></ul>
+
+          <p class="tiny" id="ins-footnote"></p>
+        </details>
+
+        <details class="sheet-section">
+          <summary>Layers</summary>
+          <label class="toggle"><input type="checkbox" id="layer-dots" checked><span>Crime dots <em>(coloured by type)</em></span></label>
+          <label class="toggle"><input type="checkbox" id="layer-heat" checked><span>Hotspot heatmap <em>(zoomed in)</em></span></label>
+          <label class="toggle"><input type="checkbox" id="layer-areas"><span>Crime areas <em>(hexagons, zoomed out)</em></span></label>
+          <label class="toggle"><input type="checkbox" id="layer-boroughs" checked><span>Borough outlines</span></label>
+          <label class="toggle"><input type="checkbox" id="layer-hotspots"><span>Hotspots <em>(DBSCAN, runs in your browser)</em></span></label>
+          <div class="hotspot-controls" id="hotspot-controls" hidden>
+            <label>Radius (eps) <output id="eps-out">60 m</output>
+              <input type="range" id="eps" min="30" max="120" step="5" value="60">
+            </label>
+            <label>Min incidents <output id="minw-out">50</output>
+              <input type="range" id="minw" min="20" max="120" step="5" value="50">
+            </label>
+            <p class="tiny" id="hotspot-summary"></p>
+          </div>
+        </details>
+
+
+        <details class="sheet-section">
+          <summary>About the data</summary>
+          <p class="tiny" id="data-status"></p>
+          <p class="tiny">Our data comes from police.uk. Locations are approximate, so each crime is shown near where it happened rather than at the exact spot. Records also arrive about a month late. Night Watch shows you what has happened, not what will happen tonight, so stay alert.</p>
+        </details>
+      </div>
+      <div class="sheet-resize" id="sheet-resize" role="separator" aria-orientation="vertical" aria-label="Resize planner panel" aria-valuemin="280" aria-valuemax="560" aria-valuenow="384" tabindex="0" title="Drag to resize the planner. Double-click to reset."></div>
+    </aside>
+
+    <div class="map-hint" id="map-hint">Click a borough for its numbers, or search for a place to start</div>
+    <div class="map-legend frame" aria-label="Map legend">
+      <p class="legend-title">Crime type</p>
+      <ul class="legend-types" id="legend-types"></ul>
+      <div class="legend-row"><span class="legend-line legend-safe"></span><span>Chosen route</span></div>
+      <div class="legend-row"><span class="legend-line legend-alt"></span><span>Alternative</span></div>
+      <div class="legend-row"><span class="legend-ring"></span><span>Incident within 40 m</span></div>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section class="section about" id="about">
+    <div class="about-grid">
+      <div class="about-copy">
+        <p class="eyebrow">About</p>
+        <p class="about-lead">Every city needs someone watching over it after dark.</p>
+        <p class="about-body">Night Watch began with a simple question: why should getting home at night feel like a gamble? So we built a map that uses real police records to see the city's dark corners, then plans a route through the streets that are busier, better lit and safer.</p>
+        <p class="about-body">No capes, no masks. Just a watchful eye on the streets, so you can walk them with confidence.</p>
+        <p class="about-sign">Walk safe. We're watching.</p>
+      </div>
+
+      <aside class="watch-card frame" aria-label="Tonight’s watch">
+        <div class="watch-head">
+          <span class="hud-label">Tonight’s watch</span>
+          <span class="watch-status" id="watch-status"></span>
+        </div>
+        <p class="watch-call" id="watch-call">–</p>
+        <div class="watch-track" aria-hidden="true">
+          <span class="watch-progress" id="watch-progress"></span>
+          <span class="lantern" id="watch-lantern"></span>
+        </div>
+        <div class="watch-ends">
+          <div><strong id="watch-dusk">–</strong><small>Dusk</small></div>
+          <div><strong id="watch-dawn">–</strong><small>Dawn</small></div>
+        </div>
+        <p class="watch-note" id="watch-note"></p>
+      </aside>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="horizon" aria-hidden="true"></div>
+    <div class="footer-inner">
+      <a class="footer-word wordmark" href="#top">Night Watch</a>
+      <p class="footer-tag">Night Watch. The city sleeps. We don't.</p>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="#map">The map</a>
+        <a href="#about">About</a>
+        <a href="details.html#how">How it works</a>
+        <a href="details.html#stack">Stack</a>
+        <a href="details.html#data-model">Data model</a>
+      </nav>
+      <p class="footer-credits">Crime data from <a href="https://data.police.uk/" target="_blank" rel="noopener">police.uk</a>, containing public sector information licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>.
+        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, basemap © <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>. Walking routes by <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">FOSSGIS OSRM</a>.</p>
+    </div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script src="js/data/boroughs.js?v=glass-2"></script>
+  <script src="js/data/london.js?v=glass-2"></script>
+  <script src="js/data/insights.js?v=insights-1"></script>
+  <script src="js/app.js?v=glass-2"></script>
+  <script src="js/map.js?v=insights-1"></script>
+  <script src="js/insights.js?v=insights-1"></script>
+  <script src="js/sheet-resize.js?v=glass-2"></script>
+</body>
+</html>
