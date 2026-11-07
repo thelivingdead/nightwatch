@@ -218,7 +218,15 @@ test("the site never ships a secret key, background tracking, or a free-text rep
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.equal(html.includes("<textarea"), false);
   assert.match(html, /call 999/);
-  assert.match(html, /not a promise of safety/i);
+  assert.match(html, /not a promise that a street is safe/i);
+  assert.equal(html.includes("<dialog"), false);
+  assert.equal(html.includes("showModal"), false);
+  assert.ok(html.indexOf('id="about"') < html.indexOf('id="account-fold"'));
+  assert.ok(html.indexOf('id="map"') < html.indexOf('id="account-fold"'));
+  assert.equal(ui.includes("showModal"), false);
+  const boot = readFileSync(new URL("../js/account.mjs", import.meta.url), "utf8");
+  assert.equal(boot.includes("await import"), true);
+  assert.equal(/^await import/m.test(boot), false);
   const account = readFileSync(new URL("../js/account.mjs", import.meta.url), "utf8");
   assert.match(account, /127\.0\.0\.1/);
   assert.match(account, /nwtest/);

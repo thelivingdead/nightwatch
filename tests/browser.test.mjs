@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { constants, copyFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import pixelmatch from "pixelmatch";
+import { PNG } from "pngjs";
 import { chromium } from "playwright-core";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -47,13 +50,13 @@ function contentType(file) {
   }[ext] || "application/octet-stream";
 }
 
-function startServer() {
+function startServer(siteRoot = root) {
   const listener = http.createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     let pathname = decodeURIComponent(url.pathname);
     if (pathname.endsWith("/")) pathname += "index.html";
-    const file = path.normalize(path.join(root, pathname));
-    if (!file.startsWith(root)) {
+    const file = path.normalize(path.join(siteRoot, pathname));
+    if (!file.startsWith(siteRoot)) {
       res.writeHead(403);
       res.end();
       return;
@@ -89,6 +92,7 @@ async function openMap(page, search) {
   await page.goto(`${base}/index.html${search}#map`, { waitUntil: "domcontentloaded" });
   const skip = page.locator("#skip-intro");
   if (await skip.count()) await skip.click({ timeout: 4000 }).catch(() => {});
+  await page.waitForFunction(() => !document.getElementById("intro-cover"));
   await page.waitForSelector(".leaflet-container");
   await page.waitForSelector(".nw-dots");
   await page.waitForFunction(() => window.NW_planner && window.NW_map);
@@ -120,37 +124,72 @@ after(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-test("existing map, route hook, and sign-in dialog", { timeout: 120000 }, async () => {
+async function openAccount(page) {
+  const fold = page.locator("#account-fold");
+  if (!(await fold.evaluate((el) => el.open))) {
+    await page.evaluate(() => document.getElementById("account").scrollIntoView({ block: "center" }));
+    await fold.locator("summary").click();
+  }
+  await page.waitForFunction(() => {
+    const fold = document.getElementById("account-fold");
+    if (!fold.open) return false;
+    const form = document.getElementById("account-form");
+    const signed = document.getElementById("account-signed-in");
+    return (form && !form.hidden) || (signed && !signed.hidden);
+  });
+}
+
+test("map stays anonymous and the account section sits below it", { timeout: 120000 }, async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const seen = await openMap(page, "");
+  assert.equal(await page.locator("dialog").count(), 0);
+  assert.equal(await page.locator("#account-fold").evaluate((el) => el.open), false);
+  assert.equal(await page.locator("#nav").getByRole("link", { name: "Plan my walk" }).count(), 1);
+  assert.equal(await page.locator("#sheet #walk-save").count(), 0);
+  assert.equal(await page.locator("#sheet #community-reports").count(), 0);
   assert.match(await page.locator("#sheet-status").innerText(), /police\.uk/i);
   assert.match(await page.locator("#legend-types").innerText(), /Violent & sexual/);
+  assert.equal((await page.locator(".map-legend").innerText()).includes("Unverified report"), false);
   const dotWidth = await page.locator(".nw-dots").evaluate((el) => el.width);
   assert.ok(dotWidth > 0);
-  await page.evaluate((walk) => window.NW_planner.showSavedWalk(walk), sampleWalk);
-  await page.waitForSelector(".route-card");
-  assert.match(await page.locator("#from-input").inputValue(), /South Bank/);
-  assert.match(await page.locator(".route-card").innerText(), /Via the river/);
-  assert.equal(await page.locator('.modes [data-mode="safest"]').getAttribute("aria-checked"), "true");
-  assert.equal(await page.locator("#walk-save").isVisible(), true);
-  const mapShot = path.join(shots, "map-route.png");
-  await page.screenshot({ path: mapShot });
-  keep("screenshot_map_route.png", mapShot);
+  const placed = await page.evaluate(() => {
+    const mapBox = document.getElementById("map").getBoundingClientRect();
+    const accountBox = document.getElementById("account").getBoundingClientRect();
+    const fold = getComputedStyle(document.getElementById("account-fold"));
+    return {
+      accountBelowMap: accountBox.top >= mapBox.bottom - 1,
+      position: fold.position,
+    };
+  });
+  assert.equal(placed.accountBelowMap, true);
+  assert.equal(placed.position, "static");
 
-  await page.locator("#account-open").click();
-  await page.locator("#account-dialog").waitFor({ state: "visible" });
-  assert.equal(await page.locator("#account-preview").isHidden(), true);
-  const signShot = path.join(shots, "sign-in.png");
-  await page.screenshot({ path: signShot });
-  keep("screenshot_sign_in.png", signShot);
+  await page.locator("#account-fold summary").focus();
+  await page.keyboard.press("Enter");
+  assert.equal(await page.locator("#account-fold").evaluate((el) => el.open), true);
+  await page.locator("#account-email-input").focus();
+  assert.equal(await page.evaluate(() => document.activeElement.id), "account-email-input");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator("#account-fold").evaluate((el) => el.open), false);
+  await page.locator("#from-input").focus();
+  assert.equal(await page.evaluate(() => document.activeElement.id), "from-input");
+
+  await openAccount(page);
   await page.locator("#account-tab-up").click();
   assert.match(await page.locator("#account-prerequisite").innerText(), /thenightwatch\.pages\.dev/);
   assert.match(await page.locator("#account-prerequisite").innerText(), /not verified/);
-
+  const belowShot = path.join(shots, "account-below.png");
+  await page.locator("#account").screenshot({ path: belowShot });
+  keep("screenshot_account_below.png", belowShot);
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobileShot = path.join(shots, "sign-in-mobile.png");
-  await page.screenshot({ path: mobileShot });
-  keep("screenshot_sign_in_mobile.png", mobileShot);
+  const mobileShot = path.join(shots, "account-below-mobile.png");
+  await page.locator("#account").screenshot({ path: mobileShot });
+  keep("screenshot_account_below_mobile.png", mobileShot);
+  const bounds = await page.locator("#account-fold").evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return { height: box.height, viewport: window.innerHeight, covers: box.height > window.innerHeight * 0.85 };
+  });
+  assert.equal(bounds.covers, false);
 
   assert.deepEqual(seen.writes, []);
   assert.deepEqual(seen.errors, []);
@@ -171,7 +210,7 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   await page.screenshot({ path: reportShot });
   keep("screenshot_community_report.png", reportShot);
 
-  await page.locator("#account-open").click();
+  await openAccount(page);
   assert.equal(await page.locator("#account-preview").isVisible(), true);
   await page.locator("#account-tab-up").click();
   await page.locator("#account-email-input").fill("walker@example.com");
@@ -188,6 +227,8 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   await page.locator("#account-submit").click();
   await page.waitForFunction(() => document.getElementById("account-email").textContent.includes("walker@example.com"));
   await page.locator("#account-close").click();
+  assert.equal(await page.locator("#account-fold").evaluate((el) => el.open), false);
+  await openAccount(page);
 
   assert.equal((await page.locator("body").innerText()).includes("Someone else's walk home"), false);
   await page.evaluate((walk) => window.NW_planner.showSavedWalk(walk), sampleWalk);
@@ -213,7 +254,7 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   await page.waitForFunction(() => /Deleted from your account/.test(document.getElementById("walk-save-note").textContent));
   assert.equal((await page.locator("#walk-list").innerText()).includes("Renamed loop"), false);
 
-  await page.locator("#community-reports summary").click();
+  await openAccount(page);
   await page.locator("input[value=lighting]").check();
   await page.locator("#report-pin").click();
   assert.match(await page.locator("#map-hint").innerText(), /approximate report/i);
@@ -247,4 +288,66 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   assert.deepEqual(seen.errors, []);
   assert.equal((await page.locator("body").innerText()).includes("Someone else's walk home"), false);
   await page.close();
+});
+
+test("a stalled sign-in script does not delay the map or a route", { timeout: 120000 }, async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.route("https://cdn.jsdelivr.net/npm/@supabase/**", () => new Promise(() => {}));
+  const started = Date.now();
+  const seen = await openMap(page, "");
+  await page.evaluate((walk) => window.NW_planner.showSavedWalk(walk), sampleWalk);
+  await page.waitForSelector(".route-card");
+  assert.match(await page.locator("#from-input").inputValue(), /South Bank/);
+  assert.ok(Date.now() - started < 15000);
+  assert.equal(await page.locator("#account-fold").evaluate((el) => el.open), false);
+  assert.deepEqual(seen.errors, []);
+  await page.close();
+});
+
+test("the map and navigation match the original page", { timeout: 120000 }, async () => {
+  const mainDir = "/tmp/nw-main";
+  if (!existsSync(path.join(mainDir, "index.html"))) {
+    execFileSync("git", ["worktree", "add", "--detach", mainDir, "origin/main"], { cwd: root });
+  }
+  const mainServer = await startServer(mainDir);
+  const mainBase = `http://127.0.0.1:${mainServer.address().port}`;
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+
+  async function capture(url, name) {
+    const page = await context.newPage();
+    await page.goto(`${url}/index.html#map`, { waitUntil: "domcontentloaded" });
+    const skip = page.locator("#skip-intro");
+    if (await skip.count()) await skip.click({ timeout: 4000 }).catch(() => {});
+    await page.waitForFunction(() => !document.getElementById("intro-cover"));
+    await page.waitForSelector(".nw-dots");
+    await page.waitForFunction(() => document.querySelectorAll(".leaflet-tile-loaded").length >= 4);
+    const mapFile = path.join(shots, `${name}-map.png`);
+    const navFile = path.join(shots, `${name}-nav.png`);
+    await page.locator("#map").screenshot({ path: mapFile });
+    await page.locator("#nav").screenshot({ path: navFile });
+    await page.close();
+    return { mapFile, navFile };
+  }
+
+  const mainShots = await capture(mainBase, "first-half-main");
+  const branchShots = await capture(base, "first-half-branch");
+  keep("screenshot_first_half_main.png", mainShots.mapFile);
+  keep("screenshot_first_half_branch.png", branchShots.mapFile);
+
+  function difference(aPath, bPath) {
+    const a = PNG.sync.read(readFileSync(aPath));
+    const b = PNG.sync.read(readFileSync(bPath));
+    assert.equal(a.width, b.width);
+    assert.equal(a.height, b.height);
+    const diff = new PNG({ width: a.width, height: a.height });
+    const mismatched = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0.15 });
+    return mismatched / (a.width * a.height);
+  }
+
+  const mapDiff = difference(mainShots.mapFile, branchShots.mapFile);
+  const navDiff = difference(mainShots.navFile, branchShots.navFile);
+  assert.ok(mapDiff < 0.02, `map first half differs by ${(mapDiff * 100).toFixed(2)}%`);
+  assert.ok(navDiff < 0.02, `navigation differs by ${(navDiff * 100).toFixed(2)}%`);
+  await context.close();
+  await new Promise((resolve) => mainServer.close(resolve));
 });

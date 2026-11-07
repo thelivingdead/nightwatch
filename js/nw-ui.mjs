@@ -65,10 +65,10 @@ function popupHtml(row, pending) {
 }
 
 export function mountNightwatchAccount({ supabase, planner, map, preview = false }) {
-  const dialog = document.getElementById("account-dialog");
+  const fold = document.getElementById("account-fold");
   const walkList = document.getElementById("walk-list");
   const reportList = document.getElementById("report-list");
-  if (!dialog || !supabase || !walkList || !reportList) return;
+  if (!fold || !supabase || !walkList || !reportList) return;
 
   const $ = (id) => document.getElementById(id);
   let session = null;
@@ -80,15 +80,10 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
   let draftLat = null;
   let draftLng = null;
   let expiryTimer = 0;
-  let returnFocus = null;
   const reportLayer = map && window.L ? window.L.layerGroup() : null;
   if (reportLayer && map) reportLayer.addTo(map);
 
-  if (preview) {
-    $("account-preview").hidden = false;
-    const bar = $("preview-bar");
-    if (bar) bar.hidden = false;
-  }
+  if (preview) $("account-preview").hidden = false;
 
   function signedIn() {
     return Boolean(session?.user);
@@ -106,9 +101,8 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     $("account-form").hidden = on;
     const email = session?.user?.email || "";
     $("account-email").textContent = email ? `Signed in as ${email}` : "";
-    const label = on ? "Account" : "Sign in";
-    $("account-open-text").textContent = label;
-    $("account-open").setAttribute("aria-label", label);
+    const summaryLabel = fold.querySelector("summary span");
+    if (summaryLabel) summaryLabel.textContent = on ? "Your account" : "Account";
     updateSaveButton();
     syncReportButton();
   }
@@ -125,10 +119,9 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
   }
 
   function openAccount(mode) {
-    returnFocus = document.activeElement;
     if (!signedIn()) setTab(mode || "in");
     paintAccount();
-    if (!dialog.open) dialog.showModal();
+    fold.open = true;
     (signedIn() ? $("account-out") : $("account-email-input"))?.focus();
   }
 
@@ -433,13 +426,9 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     setNote($("report-place-note"), pointNote(), "ok");
   }
 
-  $("account-open").addEventListener("click", () => openAccount("in"));
-  $("account-close").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
-  });
-  dialog.addEventListener("close", () => {
-    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+  $("account-close").addEventListener("click", () => {
+    fold.open = false;
+    fold.querySelector("summary")?.focus();
   });
   $("account-tab-in").addEventListener("click", () => setTab("in"));
   $("account-tab-up").addEventListener("click", () => setTab("up"));
@@ -603,7 +592,8 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
 
   $("layer-reports")?.addEventListener("change", syncLayerVisibility);
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || dialog.open) return;
+    if (event.key !== "Escape" || event.__nightwatchClosedFold) return;
+    if (fold.open && fold.contains(document.activeElement)) return;
     if (planner?.isReporting?.()) cancelPin();
   });
   document.addEventListener("visibilitychange", () => {
