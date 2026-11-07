@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Pirata+One&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="css/styles.css?v=insights-1">
+  <link rel="stylesheet" href="css/styles.css?v=account-1">
 </head>
 <body>
 
@@ -37,7 +37,13 @@
       <a href="details.html#stack">Stack</a>
       <a href="details.html#data-model">Data model</a>
     </nav>
-    <a class="btn btn-accent btn-small" href="#map" data-begin>Plan my walk</a>
+    <div class="nav-actions">
+      <button type="button" class="btn btn-quiet btn-small" id="account-open" aria-haspopup="dialog" aria-controls="account-dialog" aria-label="Sign in">
+        <svg class="account-glyph" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 19.2c1.4-3 3.8-4.4 7-4.4s5.6 1.4 7 4.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span id="account-open-text">Sign in</span>
+      </button>
+      <a class="btn btn-accent btn-small" href="#map" data-begin>Plan my walk</a>
+    </div>
   </header>
 
   <!-- Hero -->
@@ -71,6 +77,7 @@
         <img class="rail-logo" src="media/watch-mark.png" srcset="media/watch-mark.png 1x, media/watch-mark@2x.png 2x" width="40" height="40" alt="" aria-hidden="true">
         <p class="eyebrow">Plan your walk</p>
         <p class="sheet-status"><i aria-hidden="true"></i><span id="sheet-status">police.uk</span></p>
+        <p class="preview-bar" id="preview-bar" hidden>Local preview. No account is created and no email is sent.</p>
       </header>
 
       <div class="sheet-body">
@@ -103,6 +110,52 @@
         </div>
         <div class="route-results" id="route-results" aria-live="polite"></div>
         <p class="route-status warn" id="route-street-warn" hidden></p>
+
+        <div class="walk-save" id="walk-save" hidden>
+          <label class="stack-label" for="walk-name">Name this walk
+            <input id="walk-name" maxlength="60" autocomplete="off" placeholder="Evening loop">
+          </label>
+          <button type="button" class="btn btn-small btn-accent" id="walk-save-btn">Sign in to save</button>
+          <p class="form-note" id="walk-save-note" role="status"></p>
+        </div>
+
+        <details class="sheet-section" id="your-walks">
+          <summary>Your walks</summary>
+          <p class="tiny">Saved walks stay on your account. They are not shown on the public map, and other people cannot open them.</p>
+          <ul class="record-list" id="walk-list"></ul>
+          <p class="tiny" id="walk-empty">Sign in to save a walk. Only you can see the list.</p>
+        </details>
+
+        <details class="sheet-section" id="community-reports">
+          <summary>Community reports</summary>
+          <p class="tiny">Unverified notes from signed-in walkers, rounded to about 100 metres. They are not police records, not checked as emergencies, and not a promise that a street is safe. If you are in danger, call 999.</p>
+          <ul class="community-key">
+            <li><i class="legend-swatch legend-swatch-light"></i> Lighting</li>
+            <li><i class="legend-swatch legend-swatch-block"></i> Blocked path</li>
+            <li><i class="legend-swatch legend-swatch-unease"></i> Uncomfortable</li>
+            <li><i class="legend-swatch legend-swatch-pending"></i> Awaiting review, only you</li>
+          </ul>
+          <form id="report-form" class="stack-form">
+            <fieldset class="choice-set">
+              <legend>What are you noting?</legend>
+              <label class="choice"><input type="radio" name="category" value="lighting"><span><strong>Lighting</strong><small>A stretch that felt poorly lit</small></span></label>
+              <label class="choice"><input type="radio" name="category" value="blocked-path"><span><strong>Blocked path</strong><small>A way that was closed or hard to pass</small></span></label>
+              <label class="choice"><input type="radio" name="category" value="uncomfortable-experience"><span><strong>Uncomfortable</strong><small>A place that felt unsafe to be</small></span></label>
+            </fieldset>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-small btn-quiet" id="report-pin">Drop a pin</button>
+              <button type="button" class="btn btn-small btn-quiet" id="report-locate">Use my location once</button>
+              <button type="button" class="btn btn-small btn-quiet" id="report-cancel" hidden>Cancel pin</button>
+            </div>
+            <p class="form-note" id="report-place-note">No point chosen. A pin is placed only when you ask, and your location is not tracked.</p>
+            <button class="btn btn-small btn-accent" type="submit" id="report-submit" disabled>File report</button>
+          </form>
+          <p class="form-note" id="report-status" role="status"></p>
+          <p class="module-label"><span>Your reports</span><span class="live-pip" id="report-live">Connecting</span></p>
+          <ul class="record-list" id="report-list"></ul>
+          <p class="tiny" id="report-empty">Sign in to file a report. Approved reports appear on the map with no name attached.</p>
+          <label class="toggle"><input type="checkbox" id="layer-reports" checked><span>Show community reports <em>(separate from police.uk)</em></span></label>
+        </details>
 
         <details class="sheet-section" open>
           <summary>Crime types</summary>
@@ -192,7 +245,7 @@
         <details class="sheet-section">
           <summary>About the data</summary>
           <p class="tiny" id="data-status"></p>
-          <p class="tiny">Our data comes from police.uk. Locations are approximate, so each crime is shown near where it happened rather than at the exact spot. Records also arrive about a month late. Night Watch shows you what has happened, not what will happen tonight, so stay alert.</p>
+          <p class="tiny">Our data comes from police.uk. Locations are approximate, so each crime is shown near where it happened rather than at the exact spot. Records also arrive about a month late. Night Watch shows you what has happened, not what will happen tonight, so stay alert. Community reports, once a moderator has approved them, are a separate layer: unverified, rounded to about 100 metres, and removed when they expire. They are not police records and not a promise of safety.</p>
         </details>
       </div>
       <div class="sheet-resize" id="sheet-resize" role="separator" aria-orientation="vertical" aria-label="Resize planner panel" aria-valuemin="280" aria-valuemax="560" aria-valuenow="384" tabindex="0" title="Drag to resize the planner. Double-click to reset."></div>
@@ -205,6 +258,9 @@
       <div class="legend-row"><span class="legend-line legend-safe"></span><span>Chosen route</span></div>
       <div class="legend-row"><span class="legend-line legend-alt"></span><span>Alternative</span></div>
       <div class="legend-row"><span class="legend-ring"></span><span>Incident within 40 m</span></div>
+      <p class="legend-title legend-break">Separate from police.uk</p>
+      <div class="legend-row"><span class="legend-swatch legend-swatch-light"></span><span>Unverified report</span></div>
+      <div class="legend-row"><span class="legend-swatch legend-swatch-pending"></span><span>Yours, awaiting review</span></div>
     </div>
   </section>
 
@@ -251,7 +307,7 @@
         <a href="details.html#data-model">Data model</a>
       </nav>
       <p class="footer-credits">Crime data from <a href="https://data.police.uk/" target="_blank" rel="noopener">police.uk</a>, containing public sector information licensed under the <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" target="_blank" rel="noopener">Open Government Licence v3.0</a>.
-        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, basemap © <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>. Walking routes by <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">FOSSGIS OSRM</a>.</p>
+        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors, basemap © <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>. Walking routes by <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">FOSSGIS OSRM</a>. Community reports are unverified, approximate, and separate from police.uk.</p>
     </div>
   </footer>
 
@@ -262,8 +318,45 @@
   <script src="js/data/london.js?v=glass-2"></script>
   <script src="js/data/insights.js?v=insights-1"></script>
   <script src="js/app.js?v=glass-2"></script>
-  <script src="js/map.js?v=insights-1"></script>
+  <dialog id="account-dialog" class="account-dialog" aria-labelledby="account-title">
+    <div class="account-body">
+      <div class="account-head">
+        <p class="eyebrow">Account</p>
+        <button type="button" class="account-close" id="account-close" aria-label="Close">×</button>
+      </div>
+      <h2 id="account-title">Sign in</h2>
+      <p class="tiny" id="account-lead">Save walks privately, and file approximate community reports. Nothing here is an emergency service.</p>
+      <p class="preview-bar" id="account-preview" hidden>Local preview. No account is created and no email is sent.</p>
+      <div id="account-signed-in" hidden>
+        <p class="account-email" id="account-email"></p>
+        <p class="tiny">Your walks and unpublished reports stay on this account. They are not a public history.</p>
+        <button type="button" class="btn btn-small btn-quiet" id="account-out">Sign out</button>
+      </div>
+      <form id="account-form" data-mode="in">
+        <div class="account-tabs" role="tablist" aria-label="Account">
+          <button type="button" role="tab" id="account-tab-in" aria-selected="true">Sign in</button>
+          <button type="button" role="tab" id="account-tab-up" aria-selected="false">Create account</button>
+        </div>
+        <label class="stack-label" for="account-email-input">Email
+          <input id="account-email-input" name="email" type="email" autocomplete="username" inputmode="email" required>
+        </label>
+        <label class="stack-label" for="account-password-input">Password
+          <input id="account-password-input" name="password" type="password" autocomplete="current-password" minlength="6" required>
+        </label>
+        <p class="tiny" id="account-prerequisite" hidden>The owner still needs to set the Supabase Site URL to https://thenightwatch.pages.dev and allow https://thenightwatch.pages.dev/**. Until that is done, confirmation and reset links cannot be treated as working, and sign-up is not verified.</p>
+        <button class="btn btn-accent" type="submit" id="account-submit">Sign in</button>
+        <div class="account-extra">
+          <button type="button" class="link-btn" id="account-resend" hidden>Resend confirmation</button>
+          <button type="button" class="link-btn" id="account-reset">Email a password reset</button>
+        </div>
+      </form>
+      <p class="form-note" id="account-status" role="status"></p>
+    </div>
+  </dialog>
+
+  <script src="js/map.js?v=account-1"></script>
   <script src="js/insights.js?v=insights-1"></script>
   <script src="js/sheet-resize.js?v=glass-2"></script>
+  <script type="module" src="js/account.mjs?v=account-1"></script>
 </body>
 </html>
