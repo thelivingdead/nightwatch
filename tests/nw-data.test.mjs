@@ -186,9 +186,9 @@ test("realtime keeps allowlisted fields and drops expired rows from the marker s
 test("auth copy does not treat sign-up as verified", () => {
   const pending = describeSignUp({ data: { user: { identities: [{ id: "1" }] }, session: null }, error: null });
   assert.equal(pending.resend, true);
-  assert.match(pending.message, /not treated as verified/i);
+  assert.match(pending.message, /check your email/i);
   const existing = describeSignUp({ data: { user: { identities: [] }, session: null }, error: null });
-  assert.match(existing.message, /not treated as verified/i);
+  assert.match(existing.message, /check your email/i);
   const signed = describeSignIn({ data: { session: { user: {} } }, error: null });
   assert.equal(signed.message, "Signed in.");
   assert.match(friendlyAuthError({ message: "Email not confirmed" }), /resend/i);
@@ -225,8 +225,9 @@ test("the site never ships a secret key, background tracking, or a free-text rep
   assert.equal(ui.includes("getCurrentPosition"), true);
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.equal(html.includes("<textarea"), false);
-  assert.match(html, /call 999/);
-  assert.match(html, /not a promise that a street is safe/i);
+  assert.match(html, /Not an emergency service\. In danger, call 999\./);
+  assert.equal(html.includes("No capes, no masks."), false);
+  assert.equal(html.includes("Optional. The map does not need it."), false);
   assert.equal(html.includes("<dialog"), false);
   assert.equal(html.includes("showModal"), false);
   assert.ok(html.indexOf('id="about"') < html.indexOf('id="account-fold"'));

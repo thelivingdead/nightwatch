@@ -57,11 +57,8 @@ function popupHtml(row, pending) {
   const label = categoryLabel(row.category);
   const until = formatWhen(row.expires_at)
     .replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
-  const kicker = pending ? "Your report, awaiting review" : "Unverified community report";
-  const body = pending
-    ? "Only you can see this until a moderator approves it. The point is approximate, about 100 metres. It is not a police record and not an emergency alert."
-    : "Noted by a signed-in walker. Rounded to about 100 metres. Not checked, not a police record, and not a promise of safety.";
-  return `<p class="report-kicker">${kicker}</p><h4>${label}</h4><p>${body}</p><p class="report-until">Shown until ${until}.</p>`;
+  const kicker = pending ? "Awaiting review" : "Unverified report";
+  return `<p class="report-kicker">${kicker}</p><h4>${label}</h4><p class="report-until">Until ${until}.</p>`;
 }
 
 export function mountNightwatchAccount({ supabase, planner, map, preview = false }) {
@@ -83,8 +80,6 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
   const reportLayer = map && window.L ? window.L.layerGroup() : null;
   if (reportLayer && map) reportLayer.addTo(map);
 
-  if (preview) $("account-preview").hidden = false;
-
   function signedIn() {
     return Boolean(session?.user);
   }
@@ -101,8 +96,6 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     $("account-form").hidden = on;
     const email = session?.user?.email || "";
     $("account-email").textContent = email ? `Signed in as ${email}` : "";
-    const summaryLabel = fold.querySelector("summary span");
-    if (summaryLabel) summaryLabel.textContent = on ? "Your account" : "Account";
     updateSaveButton();
     syncReportButton();
   }
@@ -113,7 +106,6 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     $("account-tab-up").setAttribute("aria-selected", String(creating));
     $("account-title").textContent = creating ? "Create account" : "Sign in";
     $("account-submit").textContent = creating ? "Create account" : "Sign in";
-    $("account-prerequisite").hidden = !creating;
     $("account-password-input").setAttribute("autocomplete", creating ? "new-password" : "current-password");
     $("account-form").dataset.mode = creating ? "up" : "in";
   }
@@ -130,14 +122,14 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     const empty = $("walk-empty");
     if (!signedIn()) {
       empty.hidden = false;
-      empty.textContent = "Sign in to save a walk. Only you can see the list.";
+      empty.textContent = "Sign in to save a walk.";
       return;
     }
     const rows = [...walkById.values()].sort(
       (a, b) => (Date.parse(b.created_at || "") || 0) - (Date.parse(a.created_at || "") || 0),
     );
     empty.hidden = rows.length > 0;
-    empty.textContent = "No saved walks yet. Plan a route, name it, and save it.";
+    empty.textContent = "No saved walks yet.";
     for (const walk of rows) walkList.append(walkRecord(walk));
   }
 
@@ -168,7 +160,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
         try {
           planner?.showSavedWalk?.(walk);
         } catch (err) {
-          setNote($("walk-save-note"), err.message || "That walk could not be drawn.", "warn");
+          setNote($("walk-save-note"), err.message || "Could not draw that walk.", "warn");
         }
       }),
       linkButton("Rename", () => startRename(li, walk)),
@@ -205,7 +197,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
       const updated = walkById.get(walk.id);
       setNote(
         $("walk-save-note"),
-        updated ? "Renamed. Only your account can see it." : "That walk is no longer in your account.",
+        updated ? "Renamed." : "Walk not found.",
         updated ? "ok" : "warn",
       );
     });
@@ -217,7 +209,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
   function confirmDelete(actions, walk) {
     actions.replaceChildren();
     const ask = document.createElement("span");
-    ask.textContent = "Delete this walk from your account?";
+    ask.textContent = "Delete this walk?";
     const yes = linkButton("Delete walk", async () => {
       yes.disabled = true;
       const result = await deleteWalk(supabase, walk.id);
@@ -229,7 +221,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
       await reloadWalks(generation);
       setNote(
         $("walk-save-note"),
-        walkById.has(walk.id) ? "That walk is still on your account." : "Deleted from your account.",
+        walkById.has(walk.id) ? "Still saved." : "Deleted.",
         walkById.has(walk.id) ? "warn" : "ok",
       );
     });
@@ -242,11 +234,11 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     const rows = signedIn() ? myReportRows(reports, now) : [];
     if (!signedIn()) {
       empty.hidden = false;
-      empty.textContent = "Sign in to file a report. Approved reports appear on the map with no name attached.";
+      empty.textContent = "No reports yet.";
       return;
     }
     empty.hidden = rows.length > 0;
-    empty.textContent = "Nothing waiting. An approved report joins the public map without your name, so it leaves this list.";
+    empty.textContent = "Nothing waiting.";
     for (const row of rows) {
       const li = document.createElement("li");
       li.className = "record";
@@ -261,7 +253,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
       const meta = document.createElement("p");
       meta.className = "record-meta";
       const where = planner?.placeLabel?.(row.lat, row.lng) || "London";
-      meta.textContent = `${where} · approximate · ${timeLeft(row, now)}`;
+      meta.textContent = `${where} · ${timeLeft(row, now)}`;
       li.append(top, meta);
       reportList.append(li);
     }
@@ -278,10 +270,10 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     const marker = window.L.marker([row.lat, row.lng], {
       icon,
       keyboard: true,
-      title: pending ? "Your report, awaiting review" : "Unverified community report",
+      title: pending ? "Awaiting review" : "Unverified report",
       zIndexOffset: pending ? 400 : 300,
     });
-    const label = pending ? "Your report, awaiting review" : "Unverified community report";
+    const label = pending ? "Awaiting review" : "Unverified report";
     marker.bindTooltip(`${label} · ${categoryLabel(row.category)}`, { direction: "top", offset: [0, -8] });
     marker.bindPopup(popupHtml(row, pending), { className: "nw-popup", maxWidth: 280 });
     marker.on("popupopen", () => marker.closeTooltip());
@@ -413,14 +405,14 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
 
   function pointNote() {
     const where = planner?.placeLabel?.(draftLat, draftLng) || "Greater London";
-    return `Approximate point in ${where} (${draftLat.toFixed(3)}, ${draftLng.toFixed(3)}). About 100 metres, not the exact spot.`;
+    return `${where} · ${draftLat.toFixed(3)}, ${draftLng.toFixed(3)}`;
   }
 
   function cancelPin() {
     planner?.cancelReportPick?.();
     $("report-cancel").hidden = true;
     if (draftLat == null) {
-      setNote($("report-place-note"), "No point chosen. A pin is placed only when you ask, and your location is not tracked.", "");
+      setNote($("report-place-note"), "", "");
       return;
     }
     setNote($("report-place-note"), pointNote(), "ok");
@@ -461,7 +453,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
       $("account-status"),
       result.error
         ? (result.error.local ? result.error.message : friendlyAuthError(result.error))
-        : "Another confirmation has been requested. It is not verified from this page.",
+        : "Confirmation requested.",
       result.error ? "warn" : "ok",
     );
   });
@@ -475,7 +467,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
       $("account-status"),
       result.error
         ? (result.error.local ? result.error.message : friendlyAuthError(result.error))
-        : "If that email has an account, a reset message has been requested. The link can open this site only after the Supabase Site URL is set.",
+        : "Reset email requested.",
       result.error ? "warn" : "ok",
     );
   });
@@ -492,7 +484,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
   $("walk-save-btn")?.addEventListener("click", async () => {
     if (!currentSnap) return;
     if (!signedIn()) {
-      setNote($("walk-save-note"), "Sign in to save this walk. It stays private to your account.", "warn");
+      setNote($("walk-save-note"), "Sign in to save.", "warn");
       openAccount("in");
       return;
     }
@@ -515,7 +507,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
       return;
     }
     if (!$("walk-name").value.trim()) $("walk-name").value = name;
-    setNote($("walk-save-note"), "Saved privately to your account.", "ok");
+    setNote($("walk-save-note"), "Saved.", "ok");
     const section = $("your-walks");
     if (section) section.open = true;
     await reloadWalks(generation);
@@ -533,7 +525,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     event.preventDefault();
     const selected = document.querySelector("#report-form input[name=category]:checked");
     if (!signedIn()) {
-      setNote($("report-status"), "Sign in to file a report. Nothing is sent until you do.", "warn");
+      setNote($("report-status"), "Sign in to file a report.", "warn");
       openAccount("in");
       return;
     }
@@ -554,12 +546,8 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     planner?.cancelReportPick?.();
     $("report-cancel").hidden = true;
     $("report-form").reset();
-    setNote($("report-place-note"), "No point chosen. A pin is placed only when you ask, and your location is not tracked.", "");
-    setNote(
-      $("report-status"),
-      "Filed for review. It stays off the public map until a moderator approves it. It expires 48 hours after it was filed. Only you can see it while it waits. This is not an emergency alert.",
-      "ok",
-    );
+    setNote($("report-place-note"), "", "");
+    setNote($("report-status"), "Awaiting review.", "ok");
     await reloadReports(generation);
     syncReportButton();
   });
@@ -571,7 +559,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     }
     planner.armReportPick((latlng) => setPoint(latlng.lat, latlng.lng));
     $("report-cancel").hidden = false;
-    setNote($("report-place-note"), "Click the map to place an approximate point. Press Escape to cancel. Night Watch does not follow you.", "");
+    setNote($("report-place-note"), "Click the map.", "");
   });
 
   $("report-cancel").addEventListener("click", cancelPin);
@@ -579,13 +567,13 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     planner?.cancelReportPick?.();
     $("report-cancel").hidden = true;
     if (!navigator.geolocation || typeof navigator.geolocation.getCurrentPosition !== "function") {
-      setNote($("report-place-note"), "This browser cannot share a location. Drop a pin instead.", "warn");
+      setNote($("report-place-note"), "Location is unavailable. Drop a pin.", "warn");
       return;
     }
-    setNote($("report-place-note"), "Asking once for an approximate point. Night Watch does not keep watching your location.", "");
+    setNote($("report-place-note"), "Getting a point…", "");
     navigator.geolocation.getCurrentPosition(
       (pos) => setPoint(pos.coords.latitude, pos.coords.longitude),
-      () => setNote($("report-place-note"), "Location was not available. You can drop a pin on the map instead.", "warn"),
+      () => setNote($("report-place-note"), "Location was not available.", "warn"),
       { enableHighAccuracy: false, maximumAge: 0, timeout: 8000 },
     );
   });
