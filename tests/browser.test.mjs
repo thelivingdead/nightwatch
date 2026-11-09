@@ -346,8 +346,15 @@ test("the map and navigation match the original page", { timeout: 120000 }, asyn
     const navFile = path.join(shots, `${name}-nav.png`);
     await page.locator("#map").screenshot({ path: mapFile });
     await page.locator("#nav").screenshot({ path: navFile });
+    // Dots, heat, and the swatches that follow --crime-* are the palette under test.
+    // Hide them so the comparison still guards layout, nav, and the rest of the map.
+    await page.addStyleTag({
+      content: ".nw-dots,.nw-raw-crimes,.leaflet-heatmap-layer,.swatch,.cat-bar,.rank-bar,.legend-ring,.legend-types code,.cat-count small{visibility:hidden !important}",
+    });
+    const maskedMapFile = path.join(shots, `${name}-map-masked.png`);
+    await page.locator("#map").screenshot({ path: maskedMapFile });
     await page.close();
-    return { mapFile, navFile };
+    return { mapFile, navFile, maskedMapFile };
   }
 
   const mainShots = await capture(mainBase, "first-half-main");
@@ -365,10 +372,27 @@ test("the map and navigation match the original page", { timeout: 120000 }, asyn
     return mismatched / (a.width * a.height);
   }
 
-  const mapDiff = difference(mainShots.mapFile, branchShots.mapFile);
+  const mapDiff = difference(mainShots.maskedMapFile, branchShots.maskedMapFile);
   const navDiff = difference(mainShots.navFile, branchShots.navFile);
-  assert.ok(mapDiff < 0.02, `map first half differs by ${(mapDiff * 100).toFixed(2)}%`);
+  assert.ok(mapDiff < 0.02, `map outside the crime palette differs by ${(mapDiff * 100).toFixed(2)}%`);
   assert.ok(navDiff < 0.02, `navigation differs by ${(navDiff * 100).toFixed(2)}%`);
+
+  const css = readFileSync(path.join(root, "css/styles.css"), "utf8");
+  const mapJs = readFileSync(path.join(root, "js/map.js"), "utf8");
+  for (const [name, hex] of Object.entries({
+    "--crime-violent": "#CB727E",
+    "--crime-robbery": "#AB72A3",
+    "--crime-burglary": "#CF8E6D",
+    "--crime-vehicle": "#D1A572",
+    "--crime-drugs": "#C0BE9B",
+    "--crime-theft": "#ECBDA8",
+    "--crime-asb": "#DED8BC",
+    "--crime-other": "#DEEAEE",
+  })) {
+    assert.match(css, new RegExp(`${name}:\\s*${hex}`));
+  }
+  assert.match(mapJs, /const HEX_COLORS = \["#180E13", "#2F1E26", "#55393F", "#915F60", "#BA836F", "#D4A27A", "#E5C4A1", "#F5E1CA"\]/);
+  assert.match(mapJs, /0\.0: "rgba\(47,30,38,0\)", 0\.25: "#2F1E26", 0\.45: "#915F60", 0\.6: "#BA836F", 0\.75: "#D4A27A", 0\.9: "#E5C4A1", 1\.0: "#F5E1CA"/);
   await context.close();
   await new Promise((resolve) => mainServer.close(resolve));
 });

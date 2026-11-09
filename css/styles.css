@@ -17,8 +17,8 @@
   --text-muted: #9AA8B8;
   --text-dim: #697789;
   /* Crime dots, most to least serious */
-  --crime-violent: #FF1F4B; --crime-robbery: #E8202A; --crime-burglary: #FF4D1A; --crime-vehicle: #FF6A2B;
-  --crime-drugs: #FF8A3D; --crime-theft: #FFA552; --crime-asb: #FFC07A; --crime-other: #FFD3A8;
+  --crime-violent: #CB727E; --crime-robbery: #AB72A3; --crime-burglary: #CF8E6D; --crime-vehicle: #D1A572;
+  --crime-drugs: #C0BE9B; --crime-theft: #ECBDA8; --crime-asb: #DED8BC; --crime-other: #DEEAEE;
 
   /* Derived */
   --accent-hi: #CDEFFF;
