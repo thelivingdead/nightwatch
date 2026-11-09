@@ -85,6 +85,13 @@ test("walk insert rejects a bad mode, an empty name, and an oversized path", () 
   assert.match(huge.error, /too detailed/i);
 });
 
+test("an older balanced walk is saved and shown as safest", () => {
+  const saved = walkInsertPayload({ ...routeInput, route_mode: "balanced" });
+  assert.equal(saved.ok, true);
+  assert.equal(saved.value.route_mode, "safest");
+  assert.equal(JSON.stringify(saved.value).includes("balanced"), false);
+});
+
 test("rename sends a name and nothing else", () => {
   const built = walkUpdatePayload("  Night bus  ");
   assert.deepEqual(built.value, { name: "Night bus" });
@@ -110,6 +117,7 @@ test("saved walks drop identity fields before display", () => {
   assert.equal(walk.user_id, undefined);
   assert.equal(walk.email, undefined);
   assert.equal(Object.hasOwn(walk, "user_id"), false);
+  assert.equal(walk.route_mode, "safest");
   assert.equal(suggestWalkName(routeInput), "South Bank to St Paul’s");
 });
 

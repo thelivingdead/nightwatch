@@ -572,7 +572,7 @@ body.is-sheet-resizing .leaflet-container { pointer-events: none; }
 .chip:hover { color: var(--text); border-color: var(--accent-line); }
 .chip[aria-pressed="true"] { color: var(--nights-watch); border-color: var(--nights-watch); background: var(--accent-soft); box-shadow: 0 0 12px rgba(127, 212, 255, 0.18); }
 
-.modes { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+.modes { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
 .modes button {
   border: 0;
   border-right: 1px solid var(--line);
@@ -624,7 +624,6 @@ body.is-sheet-resizing .leaflet-container { pointer-events: none; }
 .tag { font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: rgba(229, 235, 242, 0.07); color: var(--text-muted); }
 .tag-safest { background: var(--accent-soft); color: var(--nights-watch); }
 .tag-fastest { background: rgba(229, 235, 242, 0.08); color: var(--text); }
-.tag-balanced { background: transparent; color: var(--text-soft); box-shadow: inset 0 0 0 1px var(--line-strong); }
 
 .sheet-section { border-top: 1px solid var(--line); }
 .route-results + .sheet-section { margin-top: 18px; }

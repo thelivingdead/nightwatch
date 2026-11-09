@@ -1576,10 +1576,7 @@
     if (!rs.length) return -1;
     const argmin = (f) => rs.reduce((best, r, i) => (f(r) < f(rs[best]) ? i : best), 0);
     if (mode === "fastest") return argmin((r) => r.duration);
-    if (mode === "safest") return argmin((r) => r.exposure + r.duration / 1e6);
-    const minDur = Math.min(...rs.map((r) => r.duration));
-    const minExp = Math.min(...rs.map((r) => r.exposure));
-    return argmin((r) => r.duration / minDur + (r.exposure + 5) / (minExp + 5));
+    return argmin((r) => r.exposure + r.duration / 1e6);
   }
 
   function renderRoutes(fit) {
@@ -1593,7 +1590,6 @@
 
     const tags = rs.map(() => []);
     tags[pickIndex("fastest")].push("fastest");
-    tags[pickIndex("balanced")].push("balanced");
     tags[pickIndex("safest")].push("safest");
 
     rs.forEach((r, i) => {
@@ -1659,7 +1655,7 @@
 
   document.querySelectorAll(".modes [data-mode]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      state.mode = btn.dataset.mode;
+      state.mode = btn.dataset.mode === "fastest" ? "fastest" : "safest";
       document.querySelectorAll(".modes [data-mode]").forEach((b) => b.setAttribute("aria-checked", String(b === btn)));
       if (state.routes.length) {
         state.selected = pickIndex(state.mode);
@@ -1885,7 +1881,7 @@
       map.getContainer().classList.remove("is-reporting");
     }
     clearRoute();
-    state.mode = ["fastest", "balanced", "safest"].includes(row.route_mode) ? row.route_mode : "safest";
+    state.mode = row.route_mode === "fastest" ? "fastest" : "safest";
     document.querySelectorAll(".modes [data-mode]").forEach((btn) => {
       btn.setAttribute("aria-checked", String(btn.dataset.mode === state.mode));
     });

@@ -3,7 +3,7 @@
 
 import { SITE_ORIGIN } from "./supabase-config.mjs";
 
-export const WALK_MODES = ["fastest", "balanced", "safest"];
+export const WALK_MODES = ["fastest", "safest"];
 export const REPORT_CATEGORIES = [
   { id: "lighting", label: "Lighting", detail: "A stretch that felt poorly lit" },
   { id: "blocked-path", label: "Blocked path", detail: "A way that was closed or hard to pass" },
@@ -26,11 +26,12 @@ export function categoryLabel(id) {
   return CATEGORY_LABEL[id] || "Report";
 }
 
+export function normalizeRouteMode(mode) {
+  return mode === "fastest" ? "fastest" : "safest";
+}
+
 export function modeLabel(mode) {
-  if (mode === "fastest") return "Fastest";
-  if (mode === "balanced") return "Balanced";
-  if (mode === "safest") return "Safest";
-  return "Walk";
+  return normalizeRouteMode(mode) === "fastest" ? "Fastest" : "Safest";
 }
 
 function fail(error) {
@@ -100,7 +101,8 @@ function buildFeature(input) {
 export function walkInsertPayload(input) {
   const name = cleanName(input?.name);
   if (!name.ok) return name;
-  if (!WALK_MODES.includes(input?.route_mode)) return fail("Choose fastest, balanced, or safest before saving.");
+  const routeMode = input?.route_mode === "balanced" ? "safest" : input?.route_mode;
+  if (!WALK_MODES.includes(routeMode)) return fail("Choose fastest or safest before saving.");
   const feature = buildFeature(input);
   if (!feature.ok) return feature;
   const distance = cleanInt(input?.distance ?? input?.distance_m, 100000, "distance");
@@ -114,7 +116,7 @@ export function walkInsertPayload(input) {
     ok: true,
     value: {
       name: name.value,
-      route_mode: input.route_mode,
+      route_mode: routeMode,
       route_geojson,
       distance_m: distance.value,
       duration_s: duration.value,
@@ -135,13 +137,14 @@ export function isUuid(value) {
 export function presentWalk(row) {
   if (!row || typeof row !== "object" || !isUuid(row.id)) return null;
   const name = cleanName(row.name);
-  if (!name.ok || !WALK_MODES.includes(row.route_mode)) return null;
+  const routeMode = row.route_mode === "balanced" ? "safest" : row.route_mode;
+  if (!name.ok || !WALK_MODES.includes(routeMode)) return null;
   const route = row.route_geojson;
   if (!route || route.type !== "Feature" || route.geometry?.type !== "LineString") return null;
   return {
     id: String(row.id),
     name: name.value,
-    route_mode: row.route_mode,
+    route_mode: routeMode,
     route_geojson: route,
     distance_m: Number.isFinite(Number(row.distance_m)) ? Number(row.distance_m) : null,
     duration_s: Number.isFinite(Number(row.duration_s)) ? Number(row.duration_s) : null,

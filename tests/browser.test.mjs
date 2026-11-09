@@ -196,6 +196,26 @@ test("map stays anonymous and the account section sits below it", { timeout: 120
   await page.close();
 });
 
+test("only fastest and safest draw a route", { timeout: 120000 }, async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await openMap(page, "");
+  const labels = (await page.locator(".modes button").allTextContents()).map((text) => text.trim());
+  assert.deepEqual(labels, ["Fastest", "Safest"]);
+  await page.evaluate((walk) => window.NW_planner.showSavedWalk(walk), sampleWalk);
+  await page.waitForSelector(".route-card");
+  for (const mode of ["fastest", "safest"]) {
+    await page.locator(`.modes [data-mode="${mode}"]`).click();
+    assert.equal(await page.locator(`.modes [data-mode="${mode}"]`).getAttribute("aria-checked"), "true");
+    assert.equal(await page.locator(".route-card").count(), 1);
+    assert.ok(await page.locator(".leaflet-routes-pane path").count() > 0);
+  }
+  assert.equal((await page.locator("body").innerText()).toLowerCase().includes("balanced"), false);
+  const modesShot = path.join(shots, "route-modes.png");
+  await page.locator(".modes").screenshot({ path: modesShot });
+  keep("screenshot_route_modes.png", modesShot);
+  await page.close();
+});
+
 test("preview account, private walks, reports, and expiry", { timeout: 120000 }, async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const seen = await openMap(page, "?nwtest=1");
@@ -321,6 +341,7 @@ test("the map and navigation match the original page", { timeout: 120000 }, asyn
     await page.waitForFunction(() => !document.getElementById("intro-cover"));
     await page.waitForSelector(".nw-dots");
     await page.waitForFunction(() => document.querySelectorAll(".leaflet-tile-loaded").length >= 4);
+    await page.addStyleTag({ content: ".modes{visibility:hidden !important}" });
     const mapFile = path.join(shots, `${name}-map.png`);
     const navFile = path.join(shots, `${name}-nav.png`);
     await page.locator("#map").screenshot({ path: mapFile });

@@ -64,7 +64,7 @@
       ["distance_m", "REAL"],
       ["duration_s", "REAL"],
       ["safety_score", "REAL"],
-      ["mode", "TEXT", "", "fastest | safest | balanced"],
+      ["mode", "TEXT", "", "fastest | safest"],
       ["created_at", "TIMESTAMPTZ"],
     ], idx: ["GIST (path)"] },
     { name: "users", group: "people", stage: "v2", note: "V2, or use Supabase auth.", cols: [
