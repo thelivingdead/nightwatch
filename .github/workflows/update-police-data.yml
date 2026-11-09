@@ -1,0 +1,142 @@
+name: Update police data
+
+on:
+  schedule:
+    # 06:00 UTC on the 1st of each month.
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-police-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Update London crime data
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Record previous crime count
+        id: baseline
+        run: |
+          count="$(node --input-type=module <<'EOF'
+          import { readFile } from "node:fs/promises";
+
+          let data;
+          try {
+            data = JSON.parse(await readFile("data/london.json", "utf8"));
+          } catch (error) {
+            console.error(`Existing data/london.json is not valid JSON: ${error.message}`);
+            process.exit(1);
+          }
+
+          const count = Number(data.count);
+          const length = Array.isArray(data.crimes) ? data.crimes.length : NaN;
+          if (!Number.isInteger(count) || count <= 0 || count !== length) {
+            console.error(`Existing data/london.json has an unusable crime count (count=${data.count}, crimes=${length})`);
+            process.exit(1);
+          }
+
+          process.stdout.write(String(count));
+          EOF
+          )"
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "Previous crime count: ${count}"
+
+      # update-london.mjs writes data/london.json and spawns rank-streets.mjs,
+      # which writes data/darkest-streets.json. Do not run the ranker again.
+      # Both scripts use global fetch and node: imports only; devDependencies
+      # are test-only, so this job does not install packages.
+      - name: Fetch latest police.uk month
+        run: node scripts/update-london.mjs
+
+      - name: Sanity-check updated data
+        env:
+          PREVIOUS_COUNT: ${{ steps.baseline.outputs.count }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFile } from "node:fs/promises";
+
+          const previous = Number(process.env.PREVIOUS_COUNT);
+          if (!Number.isInteger(previous) || previous <= 0) {
+            console.error(`Previous crime count is unusable: ${process.env.PREVIOUS_COUNT}`);
+            process.exit(1);
+          }
+
+          let london;
+          try {
+            london = JSON.parse(await readFile("data/london.json", "utf8"));
+          } catch (error) {
+            console.error(`data/london.json is not valid JSON: ${error.message}`);
+            process.exit(1);
+          }
+
+          const count = Number(london.count);
+          const length = Array.isArray(london.crimes) ? london.crimes.length : NaN;
+          if (!Number.isInteger(count) || count <= 0 || count !== length) {
+            console.error(`Refusing to commit: data/london.json crime count is invalid (count=${london.count}, crimes=${length})`);
+            process.exit(1);
+          }
+          if (!/^\d{4}-\d{2}$/.test(String(london.month ?? ""))) {
+            console.error(`Refusing to commit: data/london.json month is invalid (${london.month})`);
+            process.exit(1);
+          }
+          if (count * 2 < previous) {
+            console.error(`Refusing to commit: crime count ${count} is under 50% of the previous count ${previous}`);
+            process.exit(1);
+          }
+
+          let darkest;
+          try {
+            darkest = JSON.parse(await readFile("data/darkest-streets.json", "utf8"));
+          } catch (error) {
+            console.error(`data/darkest-streets.json is not valid JSON: ${error.message}`);
+            process.exit(1);
+          }
+          if (darkest.month !== london.month) {
+            console.error(`Refusing to commit: data/darkest-streets.json month (${darkest.month}) does not match data/london.json (${london.month})`);
+            process.exit(1);
+          }
+
+          console.log(`Sanity check passed: ${count} crimes for ${london.month} (previous ${previous})`);
+          EOF
+
+      - name: Commit and push data updates
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git add -- data/london.json data/darkest-streets.json
+          if git diff --cached --quiet; then
+            echo "No changes to data/london.json or data/darkest-streets.json. police.uk has not published a new month."
+            exit 0
+          fi
+
+          month="$(node --input-type=module <<'EOF'
+          import { readFile } from "node:fs/promises";
+          const data = JSON.parse(await readFile("data/london.json", "utf8"));
+          const month = String(data.month ?? "");
+          if (!/^\d{4}-\d{2}$/.test(month)) {
+            console.error(`Refusing to commit: invalid month ${data.month}`);
+            process.exit(1);
+          }
+          process.stdout.write(month);
+          EOF
+          )"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "data: police.uk update for ${month}"
+          git push origin "HEAD:${DEFAULT_BRANCH}"
