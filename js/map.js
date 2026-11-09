@@ -138,6 +138,7 @@
     request: null,
     rankExpanded: false,
   };
+  let reportPick = null;
   const checked = (id) => document.getElementById(id).checked;
 
   /* Map + panes */
@@ -1132,6 +1133,11 @@
   function updateHint() {
     const hint = document.getElementById("map-hint");
     const z = map.getZoom();
+    if (reportPick) {
+      hint.textContent = "Click the map to place an approximate report";
+      hint.classList.remove("hidden");
+      return;
+    }
     if (state.from && state.to) {
       hint.textContent = "Drag the pins to adjust, or click to start again";
     } else if (state.from) {
@@ -1174,6 +1180,7 @@
     const warn = document.getElementById("route-street-warn");
     if (warn) { warn.hidden = true; warn.textContent = ""; }
     document.querySelectorAll("#presets .chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
+    notifyRoutes();
   }
 
   function clearRoute() {
@@ -1198,6 +1205,14 @@
   }
 
   map.on("click", (e) => {
+    if (reportPick) {
+      const place = reportPick;
+      reportPick = null;
+      map.getContainer().classList.remove("is-reporting");
+      place(e.latlng);
+      updateHint();
+      return;
+    }
     const halfway = Boolean(state.from) !== Boolean(state.to);
     if (map.getZoom() <= BOROUGH_CLICK_MAX_ZOOM && !halfway) {
       const b = boroughAt(e.latlng);
@@ -1561,21 +1576,20 @@
     if (!rs.length) return -1;
     const argmin = (f) => rs.reduce((best, r, i) => (f(r) < f(rs[best]) ? i : best), 0);
     if (mode === "fastest") return argmin((r) => r.duration);
-    if (mode === "safest") return argmin((r) => r.exposure + r.duration / 1e6);
-    const minDur = Math.min(...rs.map((r) => r.duration));
-    const minExp = Math.min(...rs.map((r) => r.exposure));
-    return argmin((r) => r.duration / minDur + (r.exposure + 5) / (minExp + 5));
+    return argmin((r) => r.exposure + r.duration / 1e6);
   }
 
   function renderRoutes(fit) {
     layers.routes.clearLayers();
     layers.rings.clearLayers();
     const rs = state.routes;
-    if (!rs.length) return;
+    if (!rs.length) {
+      notifyRoutes();
+      return;
+    }
 
     const tags = rs.map(() => []);
     tags[pickIndex("fastest")].push("fastest");
-    tags[pickIndex("balanced")].push("balanced");
     tags[pickIndex("safest")].push("safest");
 
     rs.forEach((r, i) => {
@@ -1627,6 +1641,7 @@
     if (!state.enabled.size) notes.push(`<p class="route-status warn">Every category is unticked, so nothing is being scored.</p>`);
     results.innerHTML = `<p class="route-status">Route found. We've got your back.</p>` + cards + notes.join("");
     updateRouteStreetWarn(sel);
+    notifyRoutes();
   }
 
   function selectRoute(i) {
@@ -1640,7 +1655,7 @@
 
   document.querySelectorAll(".modes [data-mode]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      state.mode = btn.dataset.mode;
+      state.mode = btn.dataset.mode === "fastest" ? "fastest" : "safest";
       document.querySelectorAll(".modes [data-mode]").forEach((b) => b.setAttribute("aria-checked", String(b === btn)));
       if (state.routes.length) {
         state.selected = pickIndex(state.mode);
@@ -1812,6 +1827,104 @@
         }).addTo(layers.giHot);
       });
       layers.giHot.addTo(map);
+    },
+  };
+
+  function notifyRoutes() {
+    const snap = routeSnapshot();
+    routeListeners.forEach((fn) => {
+      try { fn(snap); } catch (err) { console.error(err); }
+    });
+  }
+
+  function routeSnapshot() {
+    const route = state.selected >= 0 ? state.routes[state.selected] : null;
+    if (!route || !state.from || !state.to) return null;
+    return {
+      mode: state.mode,
+      from: {
+        lat: state.from.latlng.lat,
+        lng: state.from.latlng.lng,
+        name: state.from.name || inputs.from.value || "",
+      },
+      to: {
+        lat: state.to.latlng.lat,
+        lng: state.to.latlng.lng,
+        name: state.to.name || inputs.to.value || "",
+      },
+      via: route.name || "",
+      distance: route.distance,
+      duration: route.duration,
+      coords: route.coords,
+    };
+  }
+
+  function placeLabel(lat, lng) {
+    const borough = boroughAt({ lat, lng });
+    return borough ? borough.name : "Greater London";
+  }
+
+  function showSavedWalk(row) {
+    const feature = row?.route_geojson;
+    const coords = feature?.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) throw new Error("This saved walk has no path to draw.");
+    const props = feature.properties || {};
+    const from = props.from || {};
+    const to = props.to || {};
+    const fromLat = Number.isFinite(Number(from.lat)) ? Number(from.lat) : Number(coords[0][1]);
+    const fromLng = Number.isFinite(Number(from.lng)) ? Number(from.lng) : Number(coords[0][0]);
+    const toLat = Number.isFinite(Number(to.lat)) ? Number(to.lat) : Number(coords[coords.length - 1][1]);
+    const toLng = Number.isFinite(Number(to.lng)) ? Number(to.lng) : Number(coords[coords.length - 1][0]);
+    if (![fromLat, fromLng, toLat, toLng].every(Number.isFinite)) throw new Error("This saved walk has no path to draw.");
+    if (reportPick) {
+      reportPick = null;
+      map.getContainer().classList.remove("is-reporting");
+    }
+    clearRoute();
+    state.mode = row.route_mode === "fastest" ? "fastest" : "safest";
+    document.querySelectorAll(".modes [data-mode]").forEach((btn) => {
+      btn.setAttribute("aria-checked", String(btn.dataset.mode === state.mode));
+    });
+    state.from = { latlng: L.latLng(fromLat, fromLng), name: from.name || null };
+    state.to = { latlng: L.latLng(toLat, toLng), name: to.name || null };
+    const route = {
+      coords,
+      distance: Number(row.distance_m) || 0,
+      duration: Number(row.duration_s) || 0,
+      stepNames: [],
+      name: props.via || row.name || "Saved walk",
+    };
+    scoreRoute(route);
+    state.routes = [route];
+    state.selected = 0;
+    updateFields();
+    renderRoutes(true);
+  }
+
+  const routeListeners = new Set();
+  window.NW_planner = {
+    snapshot: routeSnapshot,
+    subscribe(fn) {
+      routeListeners.add(fn);
+      try { fn(routeSnapshot()); } catch (err) { console.error(err); }
+      return () => routeListeners.delete(fn);
+    },
+    showSavedWalk,
+    placeLabel,
+    armReportPick(fn) {
+      reportPick = fn;
+      map.closePopup();
+      map.getContainer().classList.add("is-reporting");
+      updateHint();
+    },
+    cancelReportPick() {
+      if (!reportPick) return;
+      reportPick = null;
+      map.getContainer().classList.remove("is-reporting");
+      updateHint();
+    },
+    isReporting() {
+      return Boolean(reportPick);
     },
   };
 

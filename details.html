@@ -32,7 +32,7 @@
       <div class="steps">
         <article class="step"><h3>Ingest</h3><p>Each month a Node job pulls street-level crimes from the police.uk API while the walkable street network comes from OpenStreetMap.</p></article>
         <article class="step"><h3>Score</h3><p>Every street segment gets a <code>risk_score</code> from nearby incidents, weighted by category <code>severity_weight</code>.</p></article>
-        <article class="step"><h3>Route</h3><p>Fastest, balanced and safest options are compared. The chosen route glows across the dark map.</p></article>
+        <article class="step"><h3>Route</h3><p>Fastest and safest options are compared. The chosen route glows across the dark map.</p></article>
         <article class="step"><h3>Learn</h3><p>DBSCAN with a haversine metric finds hotspots without needing a cluster count and ignores noise.</p></article>
       </div>
       <div class="flow frame" aria-label="System architecture">

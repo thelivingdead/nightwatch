@@ -98,7 +98,6 @@
         <p class="module-label">Priority</p>
         <div class="modes" role="radiogroup" aria-label="Route mode">
           <button role="radio" data-mode="fastest">Fastest</button>
-          <button role="radio" data-mode="balanced">Balanced</button>
           <button role="radio" data-mode="safest" aria-checked="true">Safest</button>
         </div>
         <div class="route-results" id="route-results" aria-live="polite"></div>
@@ -238,6 +237,91 @@
     </div>
   </section>
 
+  <section class="account-fold-wrap" id="account" aria-label="Optional account">
+    <details class="account-fold" id="account-fold">
+      <summary>
+        <span>Account</span>
+        <small>Optional. The map does not need it.</small>
+      </summary>
+      <div class="account-fold-body">
+        <div class="account-head">
+          <h2 id="account-title">Sign in</h2>
+          <button type="button" class="account-close" id="account-close">Close</button>
+        </div>
+        <p class="tiny" id="account-lead">Save a walk on your account, or file an approximate community report. Browsing the map stays open either way. This is not an emergency service. If you are in danger, call 999.</p>
+        <p class="preview-bar" id="account-preview" hidden>Local preview. No account is created and no email is sent.</p>
+        <div id="account-signed-in" hidden>
+          <p class="account-email" id="account-email"></p>
+          <p class="tiny">Your walks and unpublished reports stay on this account. They are not a public history.</p>
+          <button type="button" class="btn btn-small btn-quiet" id="account-out">Sign out</button>
+        </div>
+        <form id="account-form" data-mode="in">
+          <div class="account-tabs" role="tablist" aria-label="Account">
+            <button type="button" role="tab" id="account-tab-in" aria-selected="true">Sign in</button>
+            <button type="button" role="tab" id="account-tab-up" aria-selected="false">Create account</button>
+          </div>
+          <label class="stack-label" for="account-email-input">Email
+            <input id="account-email-input" name="email" type="email" autocomplete="username" inputmode="email" required>
+          </label>
+          <label class="stack-label" for="account-password-input">Password
+            <input id="account-password-input" name="password" type="password" autocomplete="current-password" minlength="6" required>
+          </label>
+          <p class="tiny" id="account-prerequisite" hidden>The owner still needs to set the Supabase Site URL to https://thenightwatch.pages.dev and allow https://thenightwatch.pages.dev/**. Until that is done, confirmation and reset links cannot be treated as working, and sign-up is not verified.</p>
+          <button class="btn btn-accent" type="submit" id="account-submit">Sign in</button>
+          <div class="account-extra">
+            <button type="button" class="link-btn" id="account-resend" hidden>Resend confirmation</button>
+            <button type="button" class="link-btn" id="account-reset">Email a password reset</button>
+          </div>
+        </form>
+        <p class="form-note" id="account-status" role="status"></p>
+
+        <div class="walk-save" id="walk-save" hidden>
+          <label class="stack-label" for="walk-name">Name the route on the map
+            <input id="walk-name" maxlength="60" autocomplete="off" placeholder="Evening loop">
+          </label>
+          <button type="button" class="btn btn-small btn-accent" id="walk-save-btn">Sign in to save</button>
+          <p class="form-note" id="walk-save-note" role="status"></p>
+        </div>
+        <div id="your-walks">
+          <p class="module-label"><span>Your walks</span></p>
+          <p class="tiny">Saved walks stay on your account. They are not shown on the public map, and other people cannot open them.</p>
+          <ul class="record-list" id="walk-list"></ul>
+          <p class="tiny" id="walk-empty">Sign in to save a walk. Only you can see the list.</p>
+        </div>
+
+        <div id="community-reports">
+          <p class="module-label"><span>Community reports</span><span class="live-pip" id="report-live">Connecting</span></p>
+          <p class="tiny">Unverified notes from signed-in walkers, rounded to about 100 metres. They are not police records, not checked as emergencies, and not a promise that a street is safe.</p>
+          <ul class="community-key">
+            <li><i class="legend-swatch legend-swatch-light"></i> Lighting</li>
+            <li><i class="legend-swatch legend-swatch-block"></i> Blocked path</li>
+            <li><i class="legend-swatch legend-swatch-unease"></i> Uncomfortable</li>
+            <li><i class="legend-swatch legend-swatch-pending"></i> Awaiting review, only you</li>
+          </ul>
+          <form id="report-form" class="stack-form">
+            <fieldset class="choice-set">
+              <legend>What are you noting?</legend>
+              <label class="choice"><input type="radio" name="category" value="lighting"><span><strong>Lighting</strong><small>A stretch that felt poorly lit</small></span></label>
+              <label class="choice"><input type="radio" name="category" value="blocked-path"><span><strong>Blocked path</strong><small>A way that was closed or hard to pass</small></span></label>
+              <label class="choice"><input type="radio" name="category" value="uncomfortable-experience"><span><strong>Uncomfortable</strong><small>A place that felt unsafe to be</small></span></label>
+            </fieldset>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-small btn-quiet" id="report-pin">Drop a pin on the map</button>
+              <button type="button" class="btn btn-small btn-quiet" id="report-locate">Use my location once</button>
+              <button type="button" class="btn btn-small btn-quiet" id="report-cancel" hidden>Cancel pin</button>
+            </div>
+            <p class="form-note" id="report-place-note">No point chosen. A pin is placed only when you ask, and your location is not tracked.</p>
+            <button class="btn btn-small btn-accent" type="submit" id="report-submit" disabled>File report</button>
+          </form>
+          <p class="form-note" id="report-status" role="status"></p>
+          <ul class="record-list" id="report-list"></ul>
+          <p class="tiny" id="report-empty">Sign in to file a report. Approved reports appear on the map with no name attached.</p>
+          <label class="toggle"><input type="checkbox" id="layer-reports" checked><span>Show community reports <em>(separate from police.uk)</em></span></label>
+        </div>
+      </div>
+    </details>
+  </section>
+
   <footer class="footer">
     <div class="horizon" aria-hidden="true"></div>
     <div class="footer-inner">
@@ -265,5 +349,6 @@
   <script src="js/map.js?v=insights-1"></script>
   <script src="js/insights.js?v=insights-1"></script>
   <script src="js/sheet-resize.js?v=glass-2"></script>
+  <script type="module" src="js/account.mjs?v=account-2"></script>
 </body>
 </html>
