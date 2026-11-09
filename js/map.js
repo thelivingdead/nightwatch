@@ -55,7 +55,7 @@
   const ROUTER = "https://routing.openstreetmap.de/routed-foot/route/v1/foot/";
   const STREETISH = /\b(Street|St|Road|Lane|Place|Square|Row|Court|Avenue|Way|Walk|Gardens|Mews|Yard|Alley|Passage|Circus|Hill|Gate|Terrace|Market|Strand|Haymarket|Mall|Piccadilly|Kingsway|Holborn|Aldwych|Broadway|Embankment|Crescent|Buildings|Green|Common|Park|Rise|Grove|Parade|Drive|Close)$/i;
   const LABEL_ZOOM = 16;
-  const HEX_COLORS = ["#2a0009", "#4A0010", "#7a0a1f", "#E8202A", "#FF4D1A", "#FF8A3D", "#FFC07A", "#FFD3A8"];
+  const HEX_COLORS = ["#180E13", "#2F1E26", "#55393F", "#915F60", "#BA836F", "#D4A27A", "#E5C4A1", "#F5E1CA"];
   const HEX_ALPHA = [0.35, 0.45, 0.55, 0.62, 0.7, 0.78, 0.85, 0.92];
 
   const PRESETS = [
@@ -461,7 +461,7 @@
       maxZoom: 15,
       max: 34,
       minOpacity: 0.04,
-      gradient: { 0.0: "rgba(74,0,16,0)", 0.25: "#4A0010", 0.45: "#E8202A", 0.6: "#FF4D1A", 0.75: "#FF8A3D", 0.9: "#FFC07A", 1.0: "#FFD3A8" },
+      gradient: { 0.0: "rgba(47,30,38,0)", 0.25: "#2F1E26", 0.45: "#915F60", 0.6: "#BA836F", 0.75: "#D4A27A", 0.9: "#E5C4A1", 1.0: "#F5E1CA" },
     });
   }
 
