@@ -394,14 +394,14 @@ export function describeSignUp(result) {
     return {
       ok: true,
       tone: "warn",
-      message: "If this email is already registered, sign in. If it is new, use the confirmation email. Sign-up is not treated as verified.",
+      message: "Check your email, or sign in.",
       resend: true,
     };
   }
   return {
     ok: true,
     tone: "ok",
-    message: "Check your email for a confirmation link, then sign in. Sign-up is not treated as verified until that link can open this site.",
+    message: "Check your email, then sign in.",
     resend: true,
   };
 }

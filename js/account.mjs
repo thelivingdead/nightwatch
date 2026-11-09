@@ -28,7 +28,7 @@ async function boot() {
   } catch (error) {
     console.error(error);
     started = false;
-    note("Sign-in is unavailable right now. The map still works.");
+    note("Sign-in is unavailable.");
   }
 }
 

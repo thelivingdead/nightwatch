@@ -174,17 +174,28 @@ test("map stays anonymous and the account section sits below it", { timeout: 120
   await page.locator("#from-input").focus();
   assert.equal(await page.evaluate(() => document.activeElement.id), "from-input");
 
+  assert.equal((await page.locator("#account-fold summary").innerText()).trim().toLowerCase(), "account");
+  await page.evaluate(() => document.getElementById("account").scrollIntoView({ block: "center" }));
+  const closedShot = path.join(shots, "account-closed.png");
+  await page.locator("#account-fold").screenshot({ path: closedShot });
+  keep("screenshot_account_closed.png", closedShot);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const closedMobile = path.join(shots, "account-closed-mobile.png");
+  await page.locator("#account-fold").screenshot({ path: closedMobile });
+  keep("screenshot_account_closed_mobile.png", closedMobile);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
   await openAccount(page);
   await page.locator("#account-tab-up").click();
-  assert.match(await page.locator("#account-prerequisite").innerText(), /thenightwatch\.pages\.dev/);
-  assert.match(await page.locator("#account-prerequisite").innerText(), /not verified/);
-  const belowShot = path.join(shots, "account-below.png");
+  assert.match(await page.locator("#account-lead").innerText(), /Not an emergency service\. In danger, call 999\./);
+  assert.equal(await page.locator("#account-prerequisite").count(), 0);
+  const belowShot = path.join(shots, "account-open.png");
   await page.locator("#account").screenshot({ path: belowShot });
-  keep("screenshot_account_below.png", belowShot);
+  keep("screenshot_account_open.png", belowShot);
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobileShot = path.join(shots, "account-below-mobile.png");
+  const mobileShot = path.join(shots, "account-open-mobile.png");
   await page.locator("#account").screenshot({ path: mobileShot });
-  keep("screenshot_account_below_mobile.png", mobileShot);
+  keep("screenshot_account_open_mobile.png", mobileShot);
   const bounds = await page.locator("#account-fold").evaluate((el) => {
     const box = el.getBoundingClientRect();
     return { height: box.height, viewport: window.innerHeight, covers: box.height > window.innerHeight * 0.85 };
@@ -224,19 +235,17 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   await page.evaluate(() => window.NW_map.setView([51.513, -0.098], 15));
   await page.locator(".nw-report").first().click({ force: true });
   await page.waitForSelector(".report-kicker");
-  assert.match(await page.locator(".report-kicker").innerText(), /unverified community report/i);
-  assert.match(await page.locator(".leaflet-popup-content").innerText(), /not a promise of safety/i);
+  assert.match(await page.locator(".report-kicker").innerText(), /unverified report/i);
   const reportShot = path.join(shots, "community-report.png");
   await page.screenshot({ path: reportShot });
   keep("screenshot_community_report.png", reportShot);
 
   await openAccount(page);
-  assert.equal(await page.locator("#account-preview").isVisible(), true);
   await page.locator("#account-tab-up").click();
   await page.locator("#account-email-input").fill("walker@example.com");
   await page.locator("#account-password-input").fill("correct horse");
   await page.locator("#account-submit").click();
-  await page.waitForFunction(() => /not treated as verified/i.test(document.getElementById("account-status").textContent));
+  await page.waitForFunction(() => /check your email/i.test(document.getElementById("account-status").textContent));
   await page.locator("#account-resend").click();
   await page.waitForFunction(() => /requested/i.test(document.getElementById("account-status").textContent));
   await page.locator("#account-tab-in").click();
@@ -255,7 +264,7 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   await page.waitForFunction(() => document.getElementById("walk-save-btn").textContent === "Save this walk");
   await page.locator("#walk-name").fill("Bridge loop");
   await page.locator("#walk-save-btn").click();
-  await page.waitForFunction(() => /Saved privately/.test(document.getElementById("walk-save-note").textContent));
+  await page.waitForFunction(() => document.getElementById("walk-save-note").textContent === "Saved.");
   await page.waitForFunction(() => document.getElementById("walk-list").textContent.includes("Bridge loop"));
   const walkShot = path.join(shots, "saved-walk.png");
   await page.locator("#your-walks").scrollIntoViewIfNeeded();
@@ -271,7 +280,7 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   await page.waitForFunction(() => document.getElementById("walk-list").textContent.includes("Renamed loop"));
   await page.locator("#walk-list").getByRole("button", { name: "Delete" }).click();
   await page.locator("#walk-list").getByRole("button", { name: "Delete walk" }).click();
-  await page.waitForFunction(() => /Deleted from your account/.test(document.getElementById("walk-save-note").textContent));
+  await page.waitForFunction(() => document.getElementById("walk-save-note").textContent === "Deleted.");
   assert.equal((await page.locator("#walk-list").innerText()).includes("Renamed loop"), false);
 
   await openAccount(page);
@@ -279,9 +288,9 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   await page.locator("#report-pin").click();
   assert.match(await page.locator("#map-hint").innerText(), /approximate report/i);
   await page.locator("#leaflet").click({ position: { x: 980, y: 360 } });
-  await page.waitForFunction(() => /Approximate point/.test(document.getElementById("report-place-note").textContent));
+  await page.waitForFunction(() => /\d+\.\d{3}/.test(document.getElementById("report-place-note").textContent));
   await page.locator("#report-submit").click();
-  await page.waitForFunction(() => /Filed for review/.test(document.getElementById("report-status").textContent));
+  await page.waitForFunction(() => /Awaiting review/.test(document.getElementById("report-status").textContent));
   await page.waitForSelector(".nw-report.is-pending");
   assert.equal(await page.locator("#report-cancel").isHidden(), true);
   const pendingShot = path.join(shots, "report-pending.png");
