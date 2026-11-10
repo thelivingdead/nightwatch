@@ -34,7 +34,12 @@ const walk = {
 test("auth calls use email and password and do not invent a session", async () => {
   const client = createRecorder();
   const redirectTo = "https://thenightwatch.pages.dev/";
-  await signUp(client, { email: " Walker@Example.com ", password: "correct horse", emailRedirectTo: redirectTo });
+  await signUp(client, {
+    email: " Walker@Example.com ",
+    password: "correct horse",
+    username: " Night_Walker ",
+    emailRedirectTo: redirectTo,
+  });
   await signIn(client, { email: "walker@example.com", password: "correct horse" });
   await resendSignup(client, { email: "walker@example.com", emailRedirectTo: redirectTo });
   await requestPasswordReset(client, { email: "walker@example.com", emailRedirectTo: redirectTo });
@@ -42,8 +47,14 @@ test("auth calls use email and password and do not invent a session", async () =
   const signUpCall = client.calls.find((call) => call.op === "signUp");
   assert.equal(signUpCall.body.email, "Walker@Example.com");
   assert.equal(signUpCall.body.password, "correct horse");
-  assert.deepEqual(signUpCall.body.options, { emailRedirectTo: redirectTo });
-  assert.equal(client.calls.find((call) => call.op === "signInWithPassword").body.email, "walker@example.com");
+  assert.deepEqual(signUpCall.body.options, {
+    emailRedirectTo: redirectTo,
+    data: { username: "Night_Walker" },
+  });
+  const signInCall = client.calls.find((call) => call.op === "signInWithPassword");
+  assert.equal(signInCall.body.email, "walker@example.com");
+  assert.equal(signInCall.body.password, "correct horse");
+  assert.equal("username" in signInCall.body, false);
   assert.deepEqual(client.calls.find((call) => call.op === "resend").body, {
     type: "signup",
     email: "walker@example.com",
@@ -52,9 +63,33 @@ test("auth calls use email and password and do not invent a session", async () =
   assert.equal(client.calls.find((call) => call.op === "resetPasswordForEmail").options.redirectTo, redirectTo);
   assert.deepEqual(client.calls.find((call) => call.op === "signOut").options, { scope: "global" });
   const bad = createRecorder();
-  const refused = await signUp(bad, { email: "nope", password: "correct horse", emailRedirectTo: redirectTo });
+  const refused = await signUp(bad, { email: "nope", password: "correct horse", username: "night.walker", emailRedirectTo: redirectTo });
   assert.equal(refused.error.local, true);
   assert.equal(bad.calls.length, 0);
+});
+
+test("sign-up stores a trimmed username and refuses a handle that does not fit", async () => {
+  const redirectTo = "https://thenightwatch.pages.dev/";
+  const client = createRecorder();
+  await signUp(client, {
+    email: "walker@example.com",
+    password: "correct horse",
+    username: "  night.walker  ",
+    emailRedirectTo: redirectTo,
+  });
+  assert.deepEqual(client.calls[0].body.options.data, { username: "night.walker" });
+  for (const username of ["", "  ", "no", "a".repeat(25), "night walker", "night@watch", "café"]) {
+    const skipped = createRecorder();
+    const rejected = await signUp(skipped, {
+      email: "walker@example.com",
+      password: "correct horse",
+      username,
+      emailRedirectTo: redirectTo,
+    });
+    assert.equal(rejected.error.local, true, username);
+    assert.match(rejected.error.message, /3 to 24/);
+    assert.equal(skipped.calls.length, 0);
+  }
 });
 
 test("walk CRUD stays on the caller's own rows and the granted columns", async () => {
@@ -133,4 +168,21 @@ test("preview client hides another person's walk and pending report", async () =
   client.__moderate(mine.id, { status: "approved", expires_at: new Date(Date.now() - 1000).toISOString() });
   const expired = await client.from("community_reports").select("id");
   assert.equal(expired.data.some((row) => row.id === mine.id), true);
+});
+
+test("preview sign-up remembers the username for the later sign-in", async () => {
+  const client = createPreviewClient();
+  const signedUp = await client.auth.signUp({
+    email: "walker@example.com",
+    password: "correct horse",
+    options: { emailRedirectTo: "http://127.0.0.1:4173/", data: { username: "night.walker" } },
+  });
+  assert.equal(signedUp.data.session, null);
+  assert.equal(signedUp.data.user.user_metadata.username, "night.walker");
+  assert.equal(signedUp.data.user.identities.length, 1);
+  const signedIn = await client.auth.signInWithPassword({ email: "walker@example.com", password: "correct horse" });
+  assert.equal(signedIn.data.session.user.user_metadata.username, "night.walker");
+  const other = createPreviewClient();
+  const plain = await other.auth.signInWithPassword({ email: "walker@example.com", password: "correct horse" });
+  assert.deepEqual(plain.data.user.user_metadata, {});
 });

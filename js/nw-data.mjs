@@ -21,6 +21,8 @@ const CATEGORY_IDS = new Set(REPORT_CATEGORIES.map((c) => c.id));
 const CATEGORY_LABEL = Object.fromEntries(REPORT_CATEGORIES.map((c) => [c.id, c.label]));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME = /^[A-Za-z0-9._-]{3,24}$/;
+const USERNAME_ERROR = "Choose a username of 3 to 24 characters, using letters, numbers, dots, hyphens, or underscores.";
 
 export function categoryLabel(id) {
   return CATEGORY_LABEL[id] || "Report";
@@ -334,6 +336,12 @@ export function validateCredentials(email, password) {
   if (secret.length < 6) return fail("Use at least 6 characters for the password.");
   if (secret.length > 72) return fail("That password is too long.");
   return { ok: true, email: cleaned.value, password: secret };
+}
+
+export function validateUsername(value) {
+  const username = String(value ?? "").trim();
+  if (!USERNAME.test(username)) return fail(USERNAME_ERROR);
+  return { ok: true, value: username };
 }
 
 export function friendlyAuthError(error) {

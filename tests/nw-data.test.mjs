@@ -19,6 +19,7 @@ import {
   reportsFromRows,
   suggestWalkName,
   validateCredentials,
+  validateUsername,
   walkInsertPayload,
   walkUpdatePayload,
 } from "../js/nw-data.mjs";
@@ -195,6 +196,15 @@ test("auth copy does not treat sign-up as verified", () => {
   assert.match(friendlyAuthError({ message: "Invalid login credentials" }), /did not match/i);
   assert.equal(validateCredentials("not-an-email", "secret").ok, false);
   assert.equal(validateCredentials("walker@example.com", "short").ok, false);
+  assert.deepEqual(validateUsername("  night.walker  "), { ok: true, value: "night.walker" });
+  assert.equal(validateUsername("a_b-c.d").ok, true);
+  assert.equal(validateUsername("A".repeat(24)).ok, true);
+  for (const username of ["", "   ", "ab", "A".repeat(25), "night walker", "hi!", "name@night"]) {
+    const rejected = validateUsername(username);
+    assert.equal(rejected.ok, false, username);
+    assert.match(rejected.error, /3 to 24 characters/);
+    assert.match(rejected.error, /letters, numbers, dots, hyphens, or underscores/);
+  }
 });
 
 test("redirects stay on the Night Watch origin", () => {
@@ -232,6 +242,9 @@ test("the site never ships a secret key, background tracking, or a free-text rep
   assert.equal(html.includes("showModal"), false);
   assert.ok(html.indexOf('id="about"') < html.indexOf('id="account-fold"'));
   assert.ok(html.indexOf('id="map"') < html.indexOf('id="account-fold"'));
+  assert.match(html, /<details class="account-fold" id="account-fold">/);
+  assert.match(html, /id="account-username-label"[^>]*hidden/);
+  assert.equal(html.includes('id="account-fold" open'), false);
   assert.equal(ui.includes("showModal"), false);
   const boot = readFileSync(new URL("../js/account.mjs", import.meta.url), "utf8");
   assert.equal(boot.includes("await import"), true);
