@@ -132,7 +132,7 @@ async function openAccount(page) {
   }
   await page.waitForFunction(() => {
     const fold = document.getElementById("account-fold");
-    if (!fold.open) return false;
+    if (!fold.open || fold.dataset.accountReady !== "true") return false;
     const form = document.getElementById("account-form");
     const signed = document.getElementById("account-signed-in");
     return (form && !form.hidden) || (signed && !signed.hidden);
@@ -186,7 +186,9 @@ test("map stays anonymous and the account section sits below it", { timeout: 120
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await openAccount(page);
+  assert.equal(await page.locator("#account-username-label").isHidden(), true);
   await page.locator("#account-tab-up").click();
+  await page.waitForFunction(() => !document.getElementById("account-username-label").hidden);
   assert.match(await page.locator("#account-lead").innerText(), /Not an emergency service\. In danger, call 999\./);
   assert.equal(await page.locator("#account-prerequisite").count(), 0);
   const belowShot = path.join(shots, "account-open.png");
@@ -241,20 +243,30 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   keep("screenshot_community_report.png", reportShot);
 
   await openAccount(page);
+  assert.equal(await page.locator("#account-username-label").isHidden(), true);
   await page.locator("#account-tab-up").click();
+  await page.waitForFunction(() => !document.getElementById("account-username-label").hidden);
+  await page.locator("#account-username-input").fill("no");
   await page.locator("#account-email-input").fill("walker@example.com");
   await page.locator("#account-password-input").fill("correct horse");
+  await page.locator("#account-submit").click();
+  await page.waitForFunction(() => /3 to 24 characters/i.test(document.getElementById("account-status").textContent));
+  await page.locator("#account-username-input").fill("  night.walker  ");
   await page.locator("#account-submit").click();
   await page.waitForFunction(() => /check your email/i.test(document.getElementById("account-status").textContent));
   await page.locator("#account-resend").click();
   await page.waitForFunction(() => /requested/i.test(document.getElementById("account-status").textContent));
   await page.locator("#account-tab-in").click();
+  await page.waitForFunction(() => document.getElementById("account-username-label").hidden);
   await page.locator("#account-password-input").fill("wrong-password");
   await page.locator("#account-submit").click();
   await page.waitForFunction(() => /did not match/i.test(document.getElementById("account-status").textContent));
   await page.locator("#account-password-input").fill("correct horse");
   await page.locator("#account-submit").click();
-  await page.waitForFunction(() => document.getElementById("account-email").textContent.includes("walker@example.com"));
+  await page.waitForFunction(() => {
+    const text = document.getElementById("account-email").textContent;
+    return text.includes("night.walker") && text.includes("walker@example.com");
+  });
   await page.locator("#account-close").click();
   assert.equal(await page.locator("#account-fold").evaluate((el) => el.open), false);
   await openAccount(page);

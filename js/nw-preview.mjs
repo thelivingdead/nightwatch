@@ -82,6 +82,7 @@ export function createPreviewClient() {
     },
   ];
   let session = null;
+  const accounts = new Map();
   const listeners = new Set();
   const channels = [];
   let lastReportId = null;
@@ -206,16 +207,19 @@ export function createPreviewClient() {
 
   const client = {
     auth: {
-      async signUp({ email }) {
-        if (String(email).endsWith("@taken.test")) {
-          return {
-            data: { user: { id: PREVIEW_USER.id, identities: [], email }, session: null },
-            error: null,
-          };
-        }
+      async signUp({ email, options }) {
+        const username = options?.data?.username;
+        const user_metadata = typeof username === "string" && username ? { username } : {};
+        const taken = String(email).endsWith("@taken.test");
+        if (!taken) accounts.set(String(email), user_metadata);
         return {
           data: {
-            user: { id: PREVIEW_USER.id, email, identities: [{ id: "identity" }] },
+            user: {
+              id: PREVIEW_USER.id,
+              email,
+              identities: taken ? [] : [{ id: "identity" }],
+              user_metadata,
+            },
             session: null,
           },
           error: null,
@@ -228,7 +232,8 @@ export function createPreviewClient() {
         if (String(email).startsWith("unconfirmed@")) {
           return { data: { session: null, user: null }, error: { message: "Email not confirmed" } };
         }
-        session = { user: { ...PREVIEW_USER, email } };
+        const user_metadata = accounts.get(String(email)) || {};
+        session = { user: { ...PREVIEW_USER, email, user_metadata } };
         emitAuth("SIGNED_IN");
         return { data: { session, user: session.user }, error: null };
       },

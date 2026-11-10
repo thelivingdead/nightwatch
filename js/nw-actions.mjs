@@ -8,6 +8,7 @@ import {
   reportInsertPayload,
   validateCredentials,
   validateEmail,
+  validateUsername,
   walkInsertPayload,
   walkUpdatePayload,
   isUuid,
@@ -24,13 +25,19 @@ export function redirectFor(locationLike) {
   return emailRedirectTo(locationLike);
 }
 
-export async function signUp(supabase, { email, password, emailRedirectTo: redirectTo }) {
+export async function signUp(supabase, { email, password, username, emailRedirectTo: redirectTo }) {
   const creds = validateCredentials(email, password);
   if (!creds.ok) return localError(creds.error);
+  const handle = validateUsername(username);
+  if (!handle.ok) return localError(handle.error);
+  // There is no profiles table. Auth stores this on the user as user_metadata.
   return supabase.auth.signUp({
     email: creds.email,
     password: creds.password,
-    options: { emailRedirectTo: redirectTo },
+    options: {
+      emailRedirectTo: redirectTo,
+      data: { username: handle.value },
+    },
   });
 }
 

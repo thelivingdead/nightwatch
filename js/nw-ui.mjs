@@ -22,6 +22,7 @@ import {
   reportsFromRows,
   suggestWalkName,
   timeLeft,
+  validateUsername,
 } from "./nw-data.mjs";
 import {
   deleteWalk,
@@ -90,12 +91,21 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     button.textContent = signedIn() ? "Save this walk" : "Sign in to save";
   }
 
+  function signedInLabel(user) {
+    const email = user?.email || "";
+    const handle = validateUsername(user?.user_metadata?.username);
+    const username = handle.ok ? handle.value : "";
+    if (username && email) return `Signed in as ${username} · ${email}`;
+    if (email) return `Signed in as ${email}`;
+    if (username) return `Signed in as ${username}`;
+    return "";
+  }
+
   function paintAccount() {
     const on = signedIn();
     $("account-signed-in").hidden = !on;
     $("account-form").hidden = on;
-    const email = session?.user?.email || "";
-    $("account-email").textContent = email ? `Signed in as ${email}` : "";
+    $("account-email").textContent = signedInLabel(session?.user);
     updateSaveButton();
     syncReportButton();
   }
@@ -108,6 +118,13 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     $("account-submit").textContent = creating ? "Create account" : "Sign in";
     $("account-password-input").setAttribute("autocomplete", creating ? "new-password" : "current-password");
     $("account-form").dataset.mode = creating ? "up" : "in";
+    const usernameLabel = $("account-username-label");
+    const usernameInput = $("account-username-input");
+    if (usernameLabel) usernameLabel.hidden = !creating;
+    if (usernameInput) {
+      usernameInput.required = creating;
+      usernameInput.disabled = !creating;
+    }
   }
 
   function openAccount(mode) {
@@ -424,6 +441,11 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
   });
   $("account-tab-in").addEventListener("click", () => setTab("in"));
   $("account-tab-up").addEventListener("click", () => setTab("up"));
+  $("account-username-input")?.addEventListener("invalid", (event) => {
+    event.preventDefault();
+    const checked = validateUsername(event.target.value);
+    setNote($("account-status"), checked.ok ? "" : checked.error, "warn");
+  });
 
   $("account-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -435,7 +457,12 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     setNote($("account-status"), "Working…", "");
     const redirectTo = redirectFor(window.location);
     const result = creating
-      ? await signUp(supabase, { email, password, emailRedirectTo: redirectTo })
+      ? await signUp(supabase, {
+        email,
+        password,
+        username: $("account-username-input").value,
+        emailRedirectTo: redirectTo,
+      })
       : await signIn(supabase, { email, password });
     submit.disabled = false;
     const described = creating ? describeSignUp(result) : describeSignIn(result);
@@ -597,6 +624,8 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     }, 0);
   });
 
+  setTab($("account-form").dataset.mode === "up" ? "up" : "in");
+  fold.dataset.accountReady = "true";
   paintAccount();
   renderWalks();
   renderReportList(Date.now());
