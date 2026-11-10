@@ -4,6 +4,9 @@ import {
   applyRealtime,
   approximatePoint,
   categoryLabel,
+  londonPhotonUrl,
+  PHOTON_MIN_QUERY,
+  placesFromPhoton,
   describeSignIn,
   describeSignUp,
   formatKm,
@@ -408,14 +411,239 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     return `${where} · ${draftLat.toFixed(3)}, ${draftLng.toFixed(3)}`;
   }
 
+  let searchTimer = 0;
+  let searchAbort = null;
+  let searchResults = [];
+  let searchActive = -1;
+  let pickerMap = null;
+  let pickerMarker = null;
+  const pickerEsri = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
+
+  function pickerOpen() {
+    const panel = $("report-picker");
+    return Boolean(panel && !panel.hidden);
+  }
+
+  function hideSuggestions() {
+    const list = $("report-search-list");
+    const input = $("report-search");
+    if (list) {
+      list.hidden = true;
+      list.replaceChildren();
+    }
+    searchResults = [];
+    searchActive = -1;
+    input?.setAttribute("aria-expanded", "false");
+    input?.removeAttribute("aria-activedescendant");
+  }
+
+  function abortSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = 0;
+    if (searchAbort) searchAbort.abort();
+    searchAbort = null;
+  }
+
+  function closePicker({ keepNote = false } = {}) {
+    if (!pickerOpen()) return;
+    abortSearch();
+    hideSuggestions();
+    $("report-picker").hidden = true;
+    $("report-cancel").hidden = true;
+    if (keepNote) return;
+    if (draftLat != null) setNote($("report-place-note"), pointNote(), "ok");
+    else setNote($("report-place-note"), "", "");
+  }
+
   function cancelPin() {
     planner?.cancelReportPick?.();
-    $("report-cancel").hidden = true;
-    if (draftLat == null) {
-      setNote($("report-place-note"), "", "");
+    if (pickerOpen()) closePicker();
+    else {
+      $("report-cancel").hidden = true;
+      if (draftLat == null) setNote($("report-place-note"), "", "");
+      else setNote($("report-place-note"), pointNote(), "ok");
+    }
+  }
+
+  function ensurePickerMap() {
+    if (pickerMap) return pickerMap;
+    const el = $("report-picker-map");
+    pickerMap = window.L.map(el, {
+      zoomControl: true,
+      attributionControl: true,
+      scrollWheelZoom: false,
+      rotate: false,
+      touchRotate: false,
+      shiftKeyRotate: false,
+      rotateControl: false,
+    });
+    window.L.tileLayer(`${pickerEsri}World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
+      maxZoom: 19,
+      maxNativeZoom: 16,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &middot; &copy; <a href="https://www.esri.com/">Esri</a>',
+    }).addTo(pickerMap);
+    const labels = pickerMap.createPane("pickerLabels");
+    labels.style.zIndex = "450";
+    labels.style.pointerEvents = "none";
+    window.L.tileLayer(`${pickerEsri}World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, {
+      maxZoom: 19,
+      maxNativeZoom: 16,
+      pane: "pickerLabels",
+      className: "nw-labels",
+    }).addTo(pickerMap);
+    pickerMap.setView([51.5072, -0.1276], 11);
+    pickerMap.on("click", (event) => placePickerMarker(event.latlng));
+    return pickerMap;
+  }
+
+  function placePickerMarker(latlng, { pan = false } = {}) {
+    const map = ensurePickerMap();
+    if (!pickerMarker) {
+      pickerMarker = window.L.marker(latlng, {
+        draggable: true,
+        keyboard: false,
+        autoPan: true,
+        icon: window.L.divIcon({
+          className: "nw-pin",
+          html: '<span style="--pin:#8FDCFF"></span>',
+          iconSize: [26, 34],
+          iconAnchor: [13, 39],
+        }),
+      }).addTo(map);
+      pickerMarker.on("dragend", () => {
+        $("report-picker-use").disabled = false;
+      });
+    } else {
+      pickerMarker.setLatLng(latlng);
+    }
+    $("report-picker-use").disabled = false;
+    if (pan) map.setView(latlng, Math.max(map.getZoom(), 16));
+  }
+
+  function clearPickerMarker() {
+    if (pickerMarker) {
+      pickerMarker.remove();
+      pickerMarker = null;
+    }
+    const use = $("report-picker-use");
+    if (use) use.disabled = true;
+  }
+
+  function openPicker(point) {
+    const panel = $("report-picker");
+    if (!panel || !window.L) {
+      setNote($("report-place-note"), "The map is not ready for a pin yet.", "warn");
       return;
     }
-    setNote($("report-place-note"), pointNote(), "ok");
+    panel.hidden = false;
+    $("report-search").value = "";
+    abortSearch();
+    hideSuggestions();
+    setNote(
+      $("report-place-note"),
+      point ? "Check this spot, then use it." : "Choose a spot, then use it.",
+      "",
+    );
+    const apply = () => {
+      const map = ensurePickerMap();
+      map.invalidateSize();
+      if (point && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lng))) {
+        placePickerMarker(window.L.latLng(point.lat, point.lng), { pan: true });
+      } else {
+        clearPickerMarker();
+        map.setView([51.5072, -0.1276], 11);
+      }
+    };
+    requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(() => pickerMap?.invalidateSize());
+    });
+    panel.scrollIntoView({ block: "nearest", inline: "nearest" });
+    $("report-search")?.focus({ preventScroll: true });
+  }
+
+  function confirmPicker() {
+    if (!pickerMarker) return;
+    const { lat, lng } = pickerMarker.getLatLng();
+    const check = approximatePoint(lat, lng);
+    setPoint(lat, lng);
+    if (!check.ok) return;
+    closePicker({ keepNote: true });
+    $("report-pin")?.focus();
+  }
+
+  function setSearchActive(index) {
+    searchActive = index;
+    const buttons = [...$("report-search-list").querySelectorAll("button")];
+    buttons.forEach((button, i) => button.setAttribute("aria-selected", String(i === index)));
+    const id = buttons[index]?.id;
+    if (id) $("report-search").setAttribute("aria-activedescendant", id);
+    buttons[index]?.scrollIntoView({ block: "nearest" });
+  }
+
+  function renderSuggestions(places, note) {
+    const list = $("report-search-list");
+    const input = $("report-search");
+    list.replaceChildren();
+    searchResults = places;
+    searchActive = places.length ? 0 : -1;
+    if (!places.length) {
+      const item = document.createElement("li");
+      item.className = "empty";
+      item.textContent = note;
+      list.append(item);
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      input.removeAttribute("aria-activedescendant");
+      return;
+    }
+    places.forEach((place, i) => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.id = `report-place-${i}`;
+      button.dataset.i = String(i);
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", String(i === 0));
+      const strong = document.createElement("strong");
+      strong.textContent = place.main;
+      button.append(strong);
+      if (place.detail) {
+        const small = document.createElement("small");
+        small.textContent = place.detail;
+        button.append(small);
+      }
+      item.append(button);
+      list.append(item);
+    });
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-activedescendant", "report-place-0");
+  }
+
+  function choosePlace(index) {
+    const place = searchResults[index];
+    if (!place || !window.L) return;
+    hideSuggestions();
+    $("report-search").value = place.main;
+    placePickerMarker(window.L.latLng(place.lat, place.lng), { pan: true });
+  }
+
+  async function runPickerSearch(query) {
+    if (searchAbort) searchAbort.abort();
+    const controller = new AbortController();
+    searchAbort = controller;
+    try {
+      const res = await fetch(londonPhotonUrl(query), { signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (searchAbort !== controller) return;
+      const places = placesFromPhoton(data);
+      renderSuggestions(places, "No places found in London.");
+    } catch (err) {
+      if (controller.signal.aborted || searchAbort !== controller) return;
+      renderSuggestions([], "Search isn’t available right now. You can still tap the map.");
+    }
   }
 
   $("account-close").addEventListener("click", () => {
@@ -544,6 +772,7 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     draftLat = null;
     draftLng = null;
     planner?.cancelReportPick?.();
+    closePicker({ keepNote: true });
     $("report-cancel").hidden = true;
     $("report-form").reset();
     setNote($("report-place-note"), "", "");
@@ -553,16 +782,55 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
   });
 
   $("report-pin").addEventListener("click", () => {
-    if (!planner?.armReportPick) {
-      setNote($("report-place-note"), "The map is not ready for a pin yet.", "warn");
-      return;
-    }
-    planner.armReportPick((latlng) => setPoint(latlng.lat, latlng.lng));
-    $("report-cancel").hidden = false;
-    setNote($("report-place-note"), "Click the map.", "");
+    planner?.cancelReportPick?.();
+    const point = draftLat != null ? { lat: draftLat, lng: draftLng } : null;
+    openPicker(point);
   });
 
   $("report-cancel").addEventListener("click", cancelPin);
+  $("report-picker-close").addEventListener("click", () => {
+    closePicker();
+    $("report-pin")?.focus();
+  });
+  $("report-picker-cancel").addEventListener("click", () => {
+    closePicker();
+    $("report-pin")?.focus();
+  });
+  $("report-picker-use").addEventListener("click", confirmPicker);
+  $("report-search").addEventListener("input", () => {
+    abortSearch();
+    const query = $("report-search").value.trim();
+    if (query.length < PHOTON_MIN_QUERY) {
+      hideSuggestions();
+      return;
+    }
+    searchTimer = setTimeout(() => { runPickerSearch(query); }, 300);
+  });
+  $("report-search").addEventListener("keydown", (event) => {
+    const count = searchResults.length;
+    const open = !$("report-search-list").hidden;
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && count && open) {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setSearchActive((searchActive + step + count) % count);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (count && open) choosePlace(Math.max(0, searchActive));
+    }
+  });
+  $("report-search").addEventListener("blur", () => {
+    setTimeout(() => {
+      if (document.activeElement === $("report-search")) return;
+      if ($("report-search-list")?.contains(document.activeElement)) return;
+      hideSuggestions();
+    }, 180);
+  });
+  $("report-search-list").addEventListener("mousedown", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    event.preventDefault();
+    choosePlace(Number(button.dataset.i));
+  });
   $("report-locate").addEventListener("click", () => {
     planner?.cancelReportPick?.();
     $("report-cancel").hidden = true;
@@ -572,13 +840,27 @@ export function mountNightwatchAccount({ supabase, planner, map, preview = false
     }
     setNote($("report-place-note"), "Getting a point…", "");
     navigator.geolocation.getCurrentPosition(
-      (pos) => setPoint(pos.coords.latitude, pos.coords.longitude),
+      (pos) => openPicker({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => setNote($("report-place-note"), "Location was not available.", "warn"),
       { enableHighAccuracy: false, maximumAge: 0, timeout: 8000 },
     );
   });
 
   $("layer-reports")?.addEventListener("change", syncLayerVisibility);
+  fold.addEventListener("toggle", () => {
+    if (!fold.open) closePicker();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !pickerOpen()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!$("report-search-list").hidden) {
+      hideSuggestions();
+      return;
+    }
+    closePicker();
+    $("report-pin")?.focus();
+  }, true);
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || event.__nightwatchClosedFold) return;
     if (fold.open && fold.contains(document.activeElement)) return;

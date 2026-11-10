@@ -5,6 +5,9 @@ import {
   applyRealtime,
   approximatePoint,
   describeSignIn,
+  londonPhotonUrl,
+  PHOTON_MIN_QUERY,
+  placesFromPhoton,
   describeSignUp,
   emailRedirectTo,
   friendlyAuthError,
@@ -136,6 +139,47 @@ test("report insert is category and rounded coordinates only", () => {
   assert.match(approximatePoint(51.2, -0.1).error, /Greater London/);
   assert.equal(approximatePoint(51.28, -0.52).ok, true);
   assert.equal(approximatePoint(51.7, 0.34).ok, true);
+});
+
+test("photon search is free, biased to London, and drops anything outside the box", () => {
+  assert.equal(PHOTON_MIN_QUERY, 3);
+  const url = new URL(londonPhotonUrl("  Tower   Bridge "));
+  assert.equal(`${url.origin}${url.pathname}`, "https://photon.komoot.io/api/");
+  assert.equal(url.searchParams.get("q"), "Tower Bridge");
+  assert.equal(url.searchParams.get("limit"), "7");
+  assert.equal(url.searchParams.get("lang"), "en");
+  assert.equal(url.searchParams.get("lat"), "51.5072");
+  assert.equal(url.searchParams.get("lon"), "-0.1276");
+  assert.equal(url.searchParams.get("bbox"), "-0.52,51.28,0.34,51.7");
+  const places = placesFromPhoton({
+    features: [
+      {
+        geometry: { coordinates: [-0.0754, 51.5055] },
+        properties: { name: "Tower Bridge", city: "London", postcode: "SE1 2UP", osm_value: "bridge" },
+      },
+      {
+        geometry: { coordinates: [-0.0754, 51.5055] },
+        properties: { name: "Tower Bridge", city: "London", postcode: "SE1 2UP", osm_value: "bridge" },
+      },
+      {
+        geometry: { coordinates: [2.35, 48.86] },
+        properties: { name: "Paris", city: "Paris", osm_value: "city" },
+      },
+      {
+        geometry: { coordinates: [-0.12, 51.51] },
+        properties: { name: "Platform 4", osm_value: "platform" },
+      },
+      {
+        geometry: { coordinates: [-0.1, 51.52] },
+        properties: { street: "Fleet Street", housenumber: "10", postcode: "EC4Y 1AA", city: "London", osm_value: "house" },
+      },
+    ],
+  });
+  assert.equal(places.length, 2);
+  assert.equal(places[0].main, "Tower Bridge");
+  assert.match(places[0].detail, /SE1 2UP/);
+  assert.equal(places[1].main, "10 Fleet Street");
+  assert.equal(placesFromPhoton(null).length, 0);
 });
 
 test("public markers are approved and unexpired, and pending stays separate", () => {
