@@ -145,6 +145,24 @@ test("map stays anonymous and the account section sits below it", { timeout: 120
   assert.equal(await page.locator("dialog").count(), 0);
   assert.equal(await page.locator("#account-fold").evaluate((el) => el.open), false);
   assert.equal(await page.locator("#nav").getByRole("link", { name: "Plan my walk" }).count(), 1);
+  const brand = await page.locator(".nav-brand").evaluate((el) => {
+    const style = getComputedStyle(el);
+    const logo = getComputedStyle(el.querySelector("img"));
+    return {
+      background: style.backgroundColor,
+      outline: style.outlineStyle,
+      shadow: style.boxShadow,
+      font: style.fontFamily,
+      color: style.color,
+      glow: logo.filter,
+    };
+  });
+  assert.equal(brand.background, "rgba(0, 0, 0, 0)");
+  assert.equal(brand.outline, "none");
+  assert.equal(brand.shadow, "none");
+  assert.match(brand.font, /Pirata One/);
+  assert.equal(brand.color, "rgb(143, 220, 255)");
+  assert.match(brand.glow, /drop-shadow/);
   assert.equal(await page.locator("#sheet #walk-save").count(), 0);
   assert.equal(await page.locator("#sheet #community-reports").count(), 0);
   assert.match(await page.locator("#sheet-status").innerText(), /police\.uk/i);
@@ -285,10 +303,30 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
 
   await openAccount(page);
   await page.locator("input[value=lighting]").check();
+  assert.equal(await page.locator("#report-picker-map.leaflet-container").count(), 0);
   await page.locator("#report-pin").click();
-  assert.match(await page.locator("#map-hint").innerText(), /approximate report/i);
-  await page.locator("#leaflet").click({ position: { x: 980, y: 360 } });
+  await page.waitForSelector("#report-picker-map.leaflet-container");
+  assert.equal(await page.locator("#leaflet").evaluate((el) => el.classList.contains("is-reporting")), false);
+  assert.doesNotMatch(await page.locator("#map-hint").innerText(), /approximate report/i);
+  const pickerBox = await page.locator("#report-picker").evaluate((el) => {
+    const style = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      position: style.position,
+      covers: rect.width > window.innerWidth * 0.9 && rect.height > window.innerHeight * 0.9,
+    };
+  });
+  assert.notEqual(pickerBox.position, "fixed");
+  assert.equal(pickerBox.covers, false);
+  assert.equal(await page.locator("#report-picker-close").isVisible(), true);
+  await page.waitForFunction(() => document.getElementById("report-picker-map").clientHeight > 100);
+  const mapBox = await page.locator("#report-picker-map").boundingBox();
+  await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2);
+  await page.waitForFunction(() => !document.getElementById("report-picker-use").disabled);
+  assert.equal(await page.locator("#report-picker-map .leaflet-marker-draggable").count(), 1);
+  await page.locator("#report-picker-use").click();
   await page.waitForFunction(() => /\d+\.\d{3}/.test(document.getElementById("report-place-note").textContent));
+  assert.equal(await page.locator("#report-picker").isHidden(), true);
   await page.locator("#report-submit").click();
   await page.waitForFunction(() => /Awaiting review/.test(document.getElementById("report-status").textContent));
   await page.waitForSelector(".nw-report.is-pending");
@@ -317,6 +355,73 @@ test("preview account, private walks, reports, and expiry", { timeout: 120000 },
   assert.deepEqual(seen.errors, []);
   assert.equal((await page.locator("body").innerText()).includes("Someone else's walk home"), false);
   await page.close();
+});
+
+test("the report picker searches London and shows this device", { timeout: 120000 }, async () => {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    geolocation: { latitude: 51.513, longitude: -0.098 },
+    permissions: ["geolocation"],
+  });
+  const page = await context.newPage();
+  await page.route("https://photon.komoot.io/**", async (route) => {
+    const url = new URL(route.request().url());
+    assert.equal(url.searchParams.get("q"), "Tower");
+    assert.equal(url.searchParams.get("lat"), "51.5072");
+    assert.equal(url.searchParams.get("lon"), "-0.1276");
+    assert.equal(url.searchParams.get("bbox"), "-0.52,51.28,0.34,51.7");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        features: [
+          {
+            geometry: { type: "Point", coordinates: [-0.0754, 51.5055] },
+            properties: { name: "Tower Bridge", city: "London", postcode: "SE1 2UP", osm_value: "bridge" },
+          },
+          {
+            geometry: { type: "Point", coordinates: [2.3522, 48.8566] },
+            properties: { name: "Paris", city: "Paris", osm_value: "city" },
+          },
+        ],
+      }),
+    });
+  });
+  await openMap(page, "?nwtest=1");
+  await openAccount(page);
+  assert.equal(await page.locator("#report-picker-map.leaflet-container").count(), 0);
+  await page.locator("#report-pin").click();
+  await page.waitForSelector("#report-picker-map.leaflet-container");
+  assert.equal(await page.locator("#leaflet.is-reporting").count(), 0);
+  const tooShort = page.waitForRequest((req) => req.url().includes("photon.komoot.io"), { timeout: 600 }).then(() => true, () => false);
+  await page.locator("#report-search").fill("To");
+  assert.equal(await tooShort, false);
+  await page.locator("#report-search").fill("Tower");
+  await page.waitForSelector("#report-search-list button");
+  assert.equal(await page.locator("#report-search-list button").count(), 1);
+  assert.match(await page.locator("#report-search-list").innerText(), /Tower Bridge/);
+  assert.equal((await page.locator("#report-search-list").innerText()).includes("Paris"), false);
+  await page.locator("#report-search-list button").click();
+  await page.locator("#report-picker-use").click();
+  await page.waitForFunction(() => /51\.505,\s*-0\.075/.test(document.getElementById("report-place-note").textContent));
+  assert.equal(await page.locator("#report-picker").isHidden(), true);
+
+  await page.locator("#report-locate").click();
+  await page.waitForSelector("#report-picker:not([hidden]) #report-picker-map .nw-pin");
+  const seen = await page.evaluate(() => {
+    const pin = document.querySelector("#report-picker-map .nw-pin").getBoundingClientRect();
+    const map = document.getElementById("report-picker-map").getBoundingClientRect();
+    return pin.left < map.right && pin.right > map.left && pin.top < map.bottom && pin.bottom > map.top;
+  });
+  assert.equal(seen, true);
+  await page.locator("#report-picker-use").click();
+  await page.waitForFunction(() => /51\.513,\s*-0\.098/.test(document.getElementById("report-place-note").textContent));
+
+  await page.locator("#report-pin").click();
+  await page.locator("#report-picker-cancel").click();
+  assert.equal(await page.locator("#report-picker").isHidden(), true);
+  assert.match(await page.locator("#report-place-note").innerText(), /51\.513,\s*-0\.098/);
+  await context.close();
 });
 
 test("a stalled sign-in script does not delay the map or a route", { timeout: 120000 }, async () => {
@@ -364,20 +469,31 @@ test("the map and navigation match the original page", { timeout: 120000 }, asyn
   keep("screenshot_first_half_main.png", mainShots.mapFile);
   keep("screenshot_first_half_branch.png", branchShots.mapFile);
 
-  function difference(aPath, bPath) {
+  function difference(aPath, bPath, { ignoreLeft = 0 } = {}) {
     const a = PNG.sync.read(readFileSync(aPath));
     const b = PNG.sync.read(readFileSync(bPath));
     assert.equal(a.width, b.width);
     assert.equal(a.height, b.height);
+    if (ignoreLeft > 0) {
+      for (let y = 0; y < a.height; y++) {
+        for (let x = 0; x < ignoreLeft && x < a.width; x++) {
+          const i = (a.width * y + x) << 2;
+          a.data[i] = b.data[i];
+          a.data[i + 1] = b.data[i + 1];
+          a.data[i + 2] = b.data[i + 2];
+          a.data[i + 3] = b.data[i + 3];
+        }
+      }
+    }
     const diff = new PNG({ width: a.width, height: a.height });
     const mismatched = pixelmatch(a.data, b.data, diff.data, a.width, a.height, { threshold: 0.15 });
     return mismatched / (a.width * a.height);
   }
 
   const mapDiff = difference(mainShots.mapFile, branchShots.mapFile);
-  const navDiff = difference(mainShots.navFile, branchShots.navFile);
+  const navDiff = difference(mainShots.navFile, branchShots.navFile, { ignoreLeft: 360 });
   assert.ok(mapDiff < 0.02, `map first half differs by ${(mapDiff * 100).toFixed(2)}%`);
-  assert.ok(navDiff < 0.02, `navigation differs by ${(navDiff * 100).toFixed(2)}%`);
+  assert.ok(navDiff < 0.02, `navigation links differ by ${(navDiff * 100).toFixed(2)}%`);
   await context.close();
   await new Promise((resolve) => mainServer.close(resolve));
 });

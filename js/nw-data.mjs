@@ -169,6 +169,89 @@ export function approximatePoint(lat, lng) {
   return { ok: true, value: { lat: lat3, lng: lng3 } };
 }
 
+// Photon (Komoot) is the free geocoder the route search already uses. No API key.
+// Results are biased to central London and bounded to the same box reports allow.
+export const PHOTON_MIN_QUERY = 3;
+
+const PHOTON_KINDS = {
+  station: "Station",
+  halt: "Station",
+  subway_entrance: "Station entrance",
+  bus_station: "Bus station",
+  suburb: "Area",
+  neighbourhood: "Area",
+  quarter: "Area",
+  village: "Area",
+  town: "Area",
+  park: "Park",
+  common: "Common",
+  pub: "Pub",
+  bar: "Bar",
+  restaurant: "Restaurant",
+  cafe: "Café",
+  university: "University",
+  college: "College",
+  school: "School",
+  hospital: "Hospital",
+  library: "Library",
+  cinema: "Cinema",
+  theatre: "Theatre",
+  museum: "Museum",
+  nightclub: "Club",
+  house: "Address",
+  postcode: "Postcode",
+};
+const PHOTON_NOISE = new Set(["stop", "stop_position", "platform"]);
+
+export function londonPhotonUrl(query) {
+  const q = String(query ?? "").replace(/\s+/g, " ").trim();
+  const { minLat, maxLat, minLng, maxLng } = LONDON_BBOX;
+  return "https://photon.komoot.io/api/"
+    + `?q=${encodeURIComponent(q)}`
+    + "&limit=7&lang=en"
+    + "&lat=51.5072&lon=-0.1276"
+    + `&bbox=${minLng},${minLat},${maxLng},${maxLat}`;
+}
+
+function inLondonBox(lat, lng) {
+  return Number.isFinite(lat) && Number.isFinite(lng)
+    && lat >= LONDON_BBOX.minLat && lat <= LONDON_BBOX.maxLat
+    && lng >= LONDON_BBOX.minLng && lng <= LONDON_BBOX.maxLng;
+}
+
+function photonLabel(props) {
+  const street = [props.housenumber, props.street].filter(Boolean).join(" ");
+  const main = props.name || street || props.postcode || "Unnamed place";
+  const area = String(props.district || props.locality || props.city || "")
+    .replace(/^London Borough of /, "")
+    .replace(/^Royal Borough of /, "");
+  const detail = [PHOTON_KINDS[props.osm_value] || "", props.name ? street : "", area, props.postcode || ""]
+    .filter((part, index, all) => part && part !== main && all.indexOf(part) === index);
+  return { main: String(main), detail: detail.join(" · ") };
+}
+
+export function placesFromPhoton(data) {
+  const features = Array.isArray(data?.features) ? data.features : [];
+  const seen = new Set();
+  const places = [];
+  for (const feature of features) {
+    const props = feature?.properties || {};
+    if (PHOTON_NOISE.has(props.osm_value)) continue;
+    const coords = feature?.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) continue;
+    const lng = Number(coords[0]);
+    const lat = Number(coords[1]);
+    if (!inLondonBox(lat, lng)) continue;
+    const label = photonLabel(props);
+    const key = `${label.main}|${label.detail}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    places.push({ ...label, lat, lng });
+    if (places.length === 6) break;
+  }
+  return places;
+}
+
 export function reportInsertPayload(input) {
   if (!CATEGORY_IDS.has(input?.category)) {
     return fail("Choose lighting, a blocked path, or an uncomfortable experience.");

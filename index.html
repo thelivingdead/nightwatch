@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Pirata+One&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="css/styles.css?v=insights-1">
+  <link rel="stylesheet" href="css/styles.css?v=picker-1">
 </head>
 <body>
 
@@ -301,6 +301,22 @@
               <button type="button" class="btn btn-small btn-quiet" id="report-locate">Use my location once</button>
               <button type="button" class="btn btn-small btn-quiet" id="report-cancel" hidden>Cancel</button>
             </div>
+            <div id="report-picker" class="report-picker" hidden role="region" aria-labelledby="report-picker-title">
+              <div class="report-picker-head">
+                <p class="report-picker-title" id="report-picker-title">Choose a spot</p>
+                <button type="button" class="account-close" id="report-picker-close">Close</button>
+              </div>
+              <label class="stack-label" for="report-search">Find a place
+                <input id="report-search" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Place, address, or postcode" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="report-search-list">
+              </label>
+              <ul id="report-search-list" class="report-search-list" role="listbox" hidden></ul>
+              <div id="report-picker-map" class="report-picker-map" role="application" aria-label="Map to choose a report spot"></div>
+              <p class="report-picker-credit">Basemap © <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>. Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors. Search by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>.</p>
+              <div class="inline-actions">
+                <button type="button" class="btn btn-small btn-accent" id="report-picker-use" disabled>Use this spot</button>
+                <button type="button" class="btn btn-small btn-quiet" id="report-picker-cancel">Cancel</button>
+              </div>
+            </div>
             <p class="form-note" id="report-place-note"></p>
             <button class="btn btn-small btn-accent" type="submit" id="report-submit" disabled>File report</button>
           </form>
@@ -340,6 +356,6 @@
   <script src="js/map.js?v=insights-1"></script>
   <script src="js/insights.js?v=insights-1"></script>
   <script src="js/sheet-resize.js?v=glass-2"></script>
-  <script type="module" src="js/account.mjs?v=account-2"></script>
+  <script type="module" src="js/account.mjs?v=picker-1"></script>
 </body>
 </html>

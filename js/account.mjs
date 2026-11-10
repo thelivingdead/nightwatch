@@ -1,4 +1,4 @@
-import { mountNightwatchAccount } from "./nw-ui.mjs";
+import { mountNightwatchAccount } from "./nw-ui.mjs?v=picker-1";
 
 const fold = document.getElementById("account-fold");
 let started = false;

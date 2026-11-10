@@ -1551,14 +1551,39 @@ body.is-sheet-resizing .leaflet-container { pointer-events: none; }
   }
 }
 
-/* Watch mark */
-.nav-brand { display: inline-flex; align-items: center; gap: 12px; flex: none; }
+/* Header mark sits on the night sky: transparent, no panel and no focus box. */
+.nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.nav .nav-brand.wordmark {
+  background: transparent;
+  box-shadow: none;
+  text-shadow: 0 0 10px rgba(143, 220, 255, 0.22);
+}
+.nav .nav-brand:focus,
+.nav .nav-brand:focus-visible {
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+}
 .watch-logo {
   display: block;
   width: 44px;
   height: 44px;
-  filter: drop-shadow(0 0 5px rgba(221, 231, 242, 0.32)) drop-shadow(0 0 14px rgba(127, 212, 255, 0.22));
+  background: transparent;
+  filter: drop-shadow(0 0 6px rgba(221, 231, 242, 0.34)) drop-shadow(0 0 14px rgba(143, 220, 255, 0.2));
   animation: nw-float 6s ease-in-out infinite;
+}
+.nav .nav-brand:focus-visible .watch-logo {
+  filter: drop-shadow(0 0 8px rgba(232, 242, 250, 0.55)) drop-shadow(0 0 16px rgba(143, 220, 255, 0.32));
 }
 @keyframes nw-float { 50% { transform: translateY(-2px); } }
 @media (prefers-reduced-motion: reduce) { .watch-logo { animation: none; } }
@@ -1919,3 +1944,87 @@ html.intro-open { overflow: hidden; scroll-behavior: auto; scrollbar-gutter: sta
 .account-fold .account-email { margin: 8px 0; font-size: 14px; }
 .account-fold .account-extra { margin-top: 4px; }
 .account-fold #account-signed-in .btn { width: auto; }
+
+/* Inline report picker. It stays in the account form and leaves the main map free. */
+.report-picker {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: rgba(8, 13, 26, 0.55);
+}
+.report-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.report-picker-title {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.report-picker-head .account-close { flex: none; }
+.report-picker .stack-label { min-width: 0; }
+.report-search-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 168px;
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel-solid);
+}
+.report-search-list button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.report-search-list button strong { font-weight: 600; }
+.report-search-list button small { color: var(--text-muted); font-size: 11.5px; }
+.report-search-list button:hover,
+.report-search-list button[aria-selected="true"] { background: var(--accent-soft); }
+.report-search-list .empty {
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.report-picker-map {
+  height: 220px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+.report-picker-map.leaflet-container { font-family: var(--font-mono); background: var(--bg); }
+.report-picker-map .leaflet-control-attribution {
+  max-width: calc(100% - 48px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.report-picker-credit {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.report-picker-credit a { color: var(--text-muted); }
+.account-fold .report-picker .btn-accent { width: auto; }
+@media (max-width: 600px) {
+  .report-picker-map { height: 200px; }
+}
